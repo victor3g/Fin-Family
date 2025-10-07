@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro - Fin Family</title>
+  <!-- Incluindo a biblioteca do Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Incluindo o seu arquivo CSS -->
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="background-container">
+    <img src="../public/imagens/Fundo.png" alt="background">
+  </div>
+
+  <div class="form-card">
+    <h1 class="title">Fin Family</h1>
+    
+    <!-- Formulário de Cadastro -->
+    <form id="cadastro-form">
+      <div class="input-wrapper">
+        <input type="text" placeholder="Nome" id="name-input">
+        <span class="icon name"></span>
+      </div>
+
+      <div class="input-wrapper">
+        <input type="email" placeholder="E-mail" id="email-input">
+        <span class="icon email"></span>
+      </div>
+
+      <div class="input-wrapper">
+        <input type="password" placeholder="Senha" id="password-input">
+        <span class="icon password"></span>
+      </div>
+
+      <div class="input-wrapper">
+        <input type="password" placeholder="Repetir senha" id="confirm-password-input">
+        <span class="icon password"></span>
+      </div>
+
+      <button type="submit" class="btn">Criar conta</button>
+    </form>
+    
+    <p class="message" id="message-container"></p>
+
+    <a href="./login.html" class="login-link">
+      <span>Já tem conta? <b><a href="../index.html">Volte para o login</a></b></span>
+    </a>
+  </div>
+  
+  <!-- Incluindo o seu novo arquivo JavaScript no final do body -->
+  <script src="../js/cadastro.js"></script>
+</body>
+</html>

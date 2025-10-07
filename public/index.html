@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fin Family</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <img class="background" src="imagens/Fundo.png" alt="background">
+
+        <div class="card tela tela1 active">
+            <div class="switch" id="switchTela"></div>
+
+            <h1 class="title">Fin Family</h1>
+
+            <img class="logo-secundaria" src="imagens/porquinho.png" alt="Logo">
+
+            <div class="input-wrapper">
+                <input type="email" id="email-input" placeholder="Digite seu e-mail">
+            </div>
+
+            <div class="input-wrapper">
+                <input type="password" id="senha-input" placeholder="Digite sua senha">
+            </div>
+
+            <button class="btn entrar" id="btn-entrar">Entrar</button>
+            <button class="btn criar" id="btn-criar"><a href="telas/cadastro.html">Criar conta</a></button>
+
+            <a href="#" class="forgot">Esqueceu a senha?</a>
+        </div>
+
+        <div class="card tela tela2">
+            <div class="switch" id="switchTela2"></div>
+
+            <h1 class="title">Fin Family</h1>
+
+            <img class="logo-secundaria" src="imagens/porquinho.png" alt="Logo">
+
+            <div class="input-wrapper">
+                <input type="text" id="codigo-input" placeholder="Digite o código de acesso">
+            </div>
+
+            <button class="btn entrar" id="btn-validar-codigo">Entrar</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>
