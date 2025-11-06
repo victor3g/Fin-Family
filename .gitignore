@@ -1,0 +1,7 @@
+supabase
+node_modules
+LICENCE
+supabase.exe
+app.js
+package-lock.json
+package.json
