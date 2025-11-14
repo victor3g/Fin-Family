@@ -23,3 +23,4 @@ Transformar conceitos financeiros complexos (como ganhar, poupar, gastar e metas
 ## 📂 Estrutura Modular do Código
 
 O código foi dividido em módulos para facilitar a manutenção e o desenvolvimento (ES Modules), substituindo o bloco `<script type="module">` único.
+/finfamily ├── index.html # Estrutura visual da aplicação e importação do módulo principal ├── styles.css # Estilos globais e customizados (além do Tailwind) └── src/ ├── main.js # Ponto de entrada, gestão de estado global e navegação/autenticação ├── config.js # Constantes, temas e chaves públicas do Supabase (A chave anon é pública) ├── supabase-client.js # Funções de interação com o Supabase (CRUD, Realtime) ├── ui.js # Funções de renderização de interface (Modais, UI da Criança, Loja) ├── game.js # Lógica e motor do Mini-Game (Canvas) └── parent-dashboard.js # Funções específicas para o Painel do Responsável
