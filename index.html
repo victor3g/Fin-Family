@@ -97,9 +97,22 @@
         import { getFirestore, doc, setDoc, getDoc, onSnapshot, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Variáveis globais obrigatórias
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // NOVO CÓDIGO (CORRIGIDO PARA AMBIENTE ESTATICO):
+        // Variáveis globais obrigatórias
+        const appId = 'default-app-id'; // Use um ID de App simples e estático
+        
+        // 🚨 CRÍTICO: CONFIGURAÇÃO REAL DO FIREBASE 🚨
+        const firebaseConfig = { 
+            apiKey: "AIzaSyADRAoFcCVpxbOITXkBWJy8zscpDTlY7d4",
+            authDomain: "fin-family-85507.firebaseapp.com",
+            projectId: "fin-family-85507",
+            storageBucket: "fin-family-85507.firebasestorage.app",
+            messagingSenderId: "84592288008",
+            appId: "1:84592288008:web:198c8c8682bbaa07d44cbd",
+            measurementId: "G-L3F5TEZGJJ"
+        };
+        
+        const initialAuthToken = null; // Mantenha como 'null' para forçar o login
 
         let app, db, auth, parentId = null; 
         let currentUserId = null; // UID do usuário logado (pai ou criança, anônimo)
