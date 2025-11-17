@@ -606,13 +606,24 @@
             const confirmPassword = document.getElementById('signup-confirm-password-input').value;
             const messageEl = document.getElementById('signup-message');
 
+            messageEl.classList.remove('text-red-500', 'text-green-600', 'text-gray-600');
+            messageEl.textContent = ''; // Limpa mensagens anteriores
+
             if (password !== confirmPassword) {
                 messageEl.textContent = "Erro: As senhas não coincidem.";
+                messageEl.classList.add('text-red-500');
                 return;
             }
             
+            // --- NOVO: Validação de Senha Mínima (Cliente) ---
+            if (password.length < 6) {
+                 messageEl.textContent = "Erro: A senha deve ter no mínimo 6 dígitos.";
+                 messageEl.classList.add('text-red-500');
+                 return;
+            }
+            // ----------------------------------------------------
+            
             messageEl.textContent = 'A criar conta...';
-            messageEl.classList.remove('text-red-500', 'text-green-600');
             messageEl.classList.add('text-gray-600');
 
             // 1. Tenta criar o usuário no Supabase Auth
@@ -627,10 +638,26 @@
             });
 
             if (error) {
-                console.error("Erro ao cadastrar:", error);
-                messageEl.textContent = `Erro ao criar conta: ${error.message}`;
+                // --- Mapeamento de Erros para Português (Fallback do Servidor) ---
+                let translatedMessage = `Erro ao criar conta: Ocorreu um problema no servidor.`;
+                
+                // Mapeia erros conhecidos, mas sem logar o stack trace completo
+                if (error.message.includes("already registered")) {
+                    translatedMessage = "Erro: Este e-mail já está cadastrado.";
+                } else if (error.message.includes("Password should be at least 6 characters") || error.name === 'AuthWeakPasswordError') {
+                    // Este erro deve ser raro após a validação do cliente, mas é mantido como fallback.
+                    translatedMessage = "Erro: A senha deve ter pelo menos 6 caracteres.";
+                }
+                
+                messageEl.textContent = translatedMessage;
                 messageEl.classList.remove('text-gray-600');
                 messageEl.classList.add('text-red-500');
+                
+                // Loga apenas erros desconhecidos ou críticos
+                if (!translatedMessage.includes("Erro: A senha deve ter")) {
+                    console.error("Erro desconhecido ao cadastrar:", error);
+                }
+                
                 return;
             }
 
