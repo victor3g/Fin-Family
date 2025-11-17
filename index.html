@@ -110,7 +110,7 @@
 
         // Credenciais do Pai (Simulação)
         // REMOVIDO: HARDCODED - Não é mais usado para login, pois usamos o Supabase Auth.
-        const PARENT_CREDENTIALS = { email: 'admin@admin.com', password: 'admin' };
+        const PARENT_CREDENCIAIS = { email: 'admin@admin.com', password: 'admin' };
         
         // Constante de duração da recarga do jogo (6 horas)
         const COOLDOWN_DURATION_MS = 6 * 60 * 60 * 1000; 
@@ -814,6 +814,7 @@
                      const docData = payload.new.data.data;
                      
                      // --- APLICA MESCLAGEM PROFUNDA NO UPDATE DE REALTIME ---
+                     // Mesclamos sobre o dado atual (userData)
                      userData = deepMergeUserData(userData, { ...docData, user_id: uid });
                      // ----------------------------------------------------
 
@@ -1014,19 +1015,16 @@
         function updateUI() {
             if (userType !== 'Child') return;
 
-            // ** CORREÇÃO NOME: Garante que o nome real da criança seja usado **
+            // ** GARANTE O NOME CORRETO **
             userNameEl.textContent = userData.name;
+            // ** GARANTE AS MOEDAS CORRETAS **
             coinCountEl.textContent = userData.coins;
             
             // Atualiza Ícones, Emoção e Mascote
-            // A lógica de renderização do ícone na tela da criança está aqui
-            
-            // NOVO: Usar os dados completos do perfil
             const profileIconData = userData.profileIcon || DEFAULT_CHILD_DATA.profileIcon;
             profileIconContainer.innerHTML = '';
             profileIconContainer.innerHTML = getIconHtml(profileIconData, 'text-4xl', 'w-16 h-16');
 
-            // ** CORREÇÃO BICHINHO/MASCOTE **
             if (piggyCharEl) {
                  piggyCharEl.textContent = userData.currentPet?.value || '🐷'; 
             }
@@ -1166,6 +1164,7 @@
             saveUserData();
             hideModal();
             showModal("Poupança Completa! 🏦", `Você guardou **${saveAmount} moedas** na sua meta!`);
+            updateUI(); // CORREÇÃO: Força a atualização da UI
         }
 
         // MANTIDO: Lógica de Gasto genérico (usado apenas pela Gemini integration, mas não mapeado no botão principal)
@@ -1244,6 +1243,8 @@
                                 </div>
                             `;
                         });
+                        
+                        updateUI(); // CORREÇÃO: Força a atualização da UI
 
                     } else {
                         showModal("Erro de Saldo", "Saldo insuficiente na conta selecionada.");
@@ -1281,6 +1282,7 @@
                 saveUserData();
                 hideModal();
                 showModal("Doação Feita! ❤️", `Obrigado por doar **${amount} moedas**! Você fez o bem!`);
+                updateUI(); // CORREÇÃO: Força a atualização da UI
             });
         }
         
@@ -1509,6 +1511,7 @@
                 saveUserData();
                 document.getElementById('game-message').textContent = `FIM DE JOGO! Você ganhou ${finalScore} moedas!`;
                 showModal("Vitória no Jogo! 🥳", `Você coletou **${game.score} itens** e ganhou **${finalScore} moedas**!`);
+                updateUI(); // CORREÇÃO: Força a atualização da UI
             } else {
                  document.getElementById('game-message').textContent = 'FIM DE JOGO! Tente novamente para ganhar moedas.';
             }
@@ -1556,6 +1559,7 @@
                     addTransaction('earn', interestGained, `Juros (${diffDays} dias) da Poupança`);
                     showModal("Juros Ganhos! ✨", `Sua poupança rendeu **${interestGained} moedas** de juros acumulados!`);
                     saveUserData();
+                    updateUI(); // CORREÇÃO: Força a atualização da UI
                 }
             }
             userData.lastInterestDate = now.getTime(); 
@@ -1568,6 +1572,7 @@
                 if (badge) {
                     showModal(`Nova Conquista: ${badge.name}! 🏆`, `${badge.description} Parabéns!`);
                     saveUserData();
+                    updateUI(); // CORREÇÃO: Força a atualização da UI
                 }
             }
         }
@@ -1680,12 +1685,19 @@
                     showModal("Tarefa Desfeita", `Você perdeu **${penalty} moedas** de volta.`);
                 }
                 saveUserData();
+                updateUI(); // CORREÇÃO: Força a atualização da UI
             }
         }
         
         function deleteTask(taskId) {
             userData.tasks = userData.tasks.filter(t => t.id !== taskId);
             saveUserData();
+            // A UI da lista de tarefas precisa ser atualizada
+            const tasksListEl = document.getElementById('tasks-list');
+            if (tasksListEl) {
+                renderTasks(tasksListEl, false);
+            }
+            updateUI(); // Garante que a contagem de tarefas no header seja atualizada
         }
         
         // NOVO: Modal para o filho alterar o nome da meta
@@ -1714,6 +1726,7 @@
                     saveUserData();
                     hideModal();
                     showModal("Sucesso!", `O nome da meta foi atualizado para **${newName}**!`);
+                    updateUI(); // CORREÇÃO: Força a atualização da UI
                 } else {
                     showModal("Erro", "O nome da meta não pode ser vazio.");
                 }
@@ -1810,6 +1823,7 @@
                         hideModal();
                     }
                     saveUserData();
+                    updateUI(); // CORREÇÃO: Força a atualização da UI
                 });
             });
         }
@@ -2007,6 +2021,7 @@
                     
                     saveUserData();
                     renderShopModal(); // Re-renderiza a loja para atualizar os botões
+                    updateUI(); // CORREÇÃO: Força a atualização da UI (para moedas, ícone, emoção)
                 });
             });
         }
@@ -2312,12 +2327,8 @@
                 document.getElementById('parent-home-view').classList.add('hidden');
                 document.getElementById('child-management-view').classList.remove('hidden');
             } else {
-                showModal("Erro", "Não foi possível carregar o perfil da criança. Tentando com dados básicos.");
-                // Renderiza com dados default, mas com o nome correto
-                const child = parentData.children.find(c => c.uid === childUid);
-                renderChildManagement({ ...DEFAULT_CHILD_DATA, name: child?.name || 'Criança' });
-                document.getElementById('parent-home-view').classList.add('hidden');
-                document.getElementById('child-management-view').classList.remove('hidden');
+                showModal("Erro", "Não foi possível carregar o perfil da criança.");
+                window.showParentHome();
             }
         }
 
