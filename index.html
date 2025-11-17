@@ -19,15 +19,44 @@
 
         /* Estilo do gradiente que será atualizado via JS */
         .app-gradient {
-            /* Uso de variáveis CSS para temas dinâmicos */
             background: linear-gradient(180deg, var(--color-start, #99BFFB) 0%, var(--color-end, #C7F8DC) 100%);
             transition: background 0.5s ease;
         }
 
+        /* --- NOVO: Estilo para o Background da Tela de Login --- */
+        .login-background {
+            background-image: url('Fundo.png');
+            background-repeat: repeat; 
+            background-size: contain; 
+            background-color: #EDEFF2; /* Cor de fallback */
+        }
+
+        /* --- NOVO: Estilo Soft Neumorphism para Cards e Inputs --- */
+        .soft-card {
+            background-color: #FCFCFC;
+            border-radius: 1rem; /* 16px */
+            box-shadow: 
+                /* Sombra externa sutil (principal) */
+                0 6px 15px rgba(0, 0, 0, 0.1),
+                /* Sombra interna para o efeito de relevo (opcional) */
+                inset 0 2px 4px rgba(255, 255, 255, 0.5);
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .soft-input {
+             border: 1px solid #E5E7EB;
+             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+             transition: box-shadow 0.2s;
+        }
+        .soft-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(154, 193, 251, 0.5); /* Cor primária do app */
+            border-color: #9AC1FB;
+        }
+        
         /* Estilos para responsividade móvel */
         .mobile-card {
-            box-shadow: 0px 0px 15px 3px rgba(0, 0, 0, 0.3);
-            /* Usando min-h-[90vh] para forçar a altura em dispositivos móveis */
+            /* Mantido o min-height para garantir a altura em iframe/mobile */
             min-height: 90vh;
         }
 
@@ -37,24 +66,39 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
+        /* --- NOVO: Botões de Ação com Profundidade (Gamificação) --- */
         .action-button {
-            transition: transform 0.1s, box-shadow 0.2s;
+            transition: transform 0.1s, box-shadow 0.2s, background 0.2s;
+            border-radius: 12px;
+            box-shadow: 0 6px 0 0 rgba(0, 0, 0, 0.25); /* Sombra 3D */
+            /* NOVO: Efeito de Relevo na parte superior */
+            border-top: 2px solid rgba(255, 255, 255, 0.4); 
+            border-bottom: none;
         }
         .action-button:active {
-            transform: scale(0.95);
-            box-shadow: none;
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.25);
         }
-
+        
+        /* Cor dos botões de ação (para evitar cores fixas no JS) */
+        .action-green { background-color: #4CAF50; }
+        .action-blue { background-color: #64B5F6; }
+        .action-red { background-color: #FF7043; }
+        .action-yellow { background-color: #FFC107; }
+        
         /* Estilo para o modal e sidebar */
-        .modal-overlay { z-index: 1000; background-color: rgba(0, 0, 0, 0.5); }
-        .modal-content { box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3); }
+        .modal-overlay { z-index: 1000; background-color: rgba(0, 0, 0, 0.6); }
+        .modal-content { 
+             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); 
+             border-radius: 1.5rem; /* 24px */
+        }
         .sidebar { z-index: 900; transition: transform 0.3s ease-in-out; }
 
-        /* Estilos do Canvas Game */
+        /* Estilos do Canvas Game (Borda mais suave) */
         #game-canvas {
             border: 4px solid #fff;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            background-color: #f0f8ff; /* Fundo do céu */
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            background-color: #e0f7fa; /* Fundo do céu leve */
             border-radius: 12px;
         }
 
@@ -82,14 +126,16 @@
             animation: react-animation 0.5s ease-out;
         }
         
-        /* Ajuste do container principal para usar a altura total do dispositivo */
-        .full-height-container {
-             height: 100vh;
-             min-height: 600px; /* Garante usabilidade mínima */
+        /* --- NOVO: Contêiner Mascote com estilo lúdico --- */
+        #animated-piggy-container {
+             background-color: rgba(255, 255, 255, 0.5);
+             border: 2px solid rgba(255, 255, 255, 0.7);
+             border-radius: 9999px;
+             box-shadow: 0 0 10px rgba(154, 193, 251, 0.5); /* Sombra da cor do gradiente */
         }
     </style>
 </head>
-<body class="bg-[#EDEFF2] min-h-screen flex flex-col items-center pt-8 pb-4">
+<body class="login-background min-h-screen flex flex-col items-center pt-8 pb-4">
     <!-- Script de Inicialização do Supabase e Lógica do App -->
     <script type="module">
         // NOVO: Importação do cliente Supabase
@@ -977,14 +1023,15 @@
             document.body.style.setProperty('--color-start', theme.start);
             document.body.style.setProperty('--color-end', theme.end);
             
-            // NOVO: Garantir que o body use o gradiente (apenas na vista Child)
             const bodyEl = document.body;
-            if (userType === 'Child' || userType === 'Parent') { // Pai também usa o gradiente agora
+            if (userType === 'Child' || userType === 'Parent') { // Usuário logado
                  bodyEl.classList.add('app-gradient');
+                 bodyEl.classList.remove('login-background'); // REMOÇÃO DO BG DE LOGIN
                  bodyEl.classList.remove('bg-[#EDEFF2]');
-            } else {
+            } else { // Usuário Guest (Login/Signup/Forgot Password)
                  bodyEl.classList.remove('app-gradient');
-                 bodyEl.classList.add('bg-[#EDEFF2]');
+                 bodyEl.classList.add('login-background'); // ADICIONA O BG DE LOGIN
+                 bodyEl.classList.remove('bg-[#EDEFF2]');
             }
         }
         
@@ -1061,14 +1108,16 @@
             const isCooldown = isGameOnCooldown();
 
             if (isCooldown) {
-                ganharBtn.classList.remove('bg-[#32CD32]', 'hover:bg-green-600');
-                ganharBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                // A cor agora é controlada pela classe CSS pura, mas podemos desabilitar visualmente via Tailwind e disabled
+                ganharBtn.classList.remove('action-green'); // Remove a cor ativa
+                ganharBtn.classList.add('bg-gray-400', 'cursor-not-allowed', 'shadow-none', 'transform-none'); // Adiciona cor e desabilita o visual 3D
                 ganharBtn.disabled = true;
                 ganharAmount.textContent = getRemainingCooldownTime();
                 document.getElementById('earn-text').textContent = 'Recarga'; 
             } else {
-                ganharBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
-                ganharBtn.classList.add('bg-[#32CD32]', 'hover:bg-green-600');
+                // Reverte para o estado ativo
+                ganharBtn.classList.remove('bg-gray-400', 'cursor-not-allowed', 'shadow-none', 'transform-none');
+                ganharBtn.classList.add('action-green'); // Adiciona a cor ativa
                 ganharBtn.disabled = false;
                 ganharAmount.textContent = `+${userData.actions.earn}`;
                 document.getElementById('earn-text').textContent = 'Ganhar'; 
@@ -1133,8 +1182,8 @@
             showModal("Quanto Quer Poupar? 💰", `
                 <p class="font-itim mb-4">Seu saldo atual é de **${userData.coins} moedas**. Digite a quantidade que você quer guardar na meta:</p>
                 <div class="space-y-4">
-                    <input type="number" id="save-input-amount" placeholder="Valor a Poupar" class="w-full p-3 border rounded-lg font-itim text-lg" min="1" max="${userData.coins}">
-                    <button id="execute-save-btn" class="w-full bg-blue-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-blue-600 transition-colors">
+                    <input type="number" id="save-input-amount" placeholder="Valor a Poupar" class="soft-input w-full p-3 border rounded-lg font-itim text-lg" min="1" max="${userData.coins}">
+                    <button id="execute-save-btn" class="w-full bg-blue-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-blue-600 transition-colors action-button">
                         Guardar na Meta (${userData.progress.targetName})
                     </button>
                 </div>
@@ -1176,16 +1225,16 @@
                 <div class="space-y-3">
                     <div class="p-3 border rounded-lg bg-red-50">
                         <p class="font-bold mb-2">Isso é uma necessidade ou um desejo?</p>
-                        <select id="spend-category" class="w-full p-2 border rounded font-itim">
+                        <select id="spend-category" class="w-full p-2 border rounded font-itim soft-input">
                             <option value="Desejo">Desejo (Brinquedo, Doce, etc.)</option>
                             <option value="Necessidade">Necessidade (Comida, Material Escolar, etc.)</option>
                         </select>
                     </div>
                     
-                    <button id="spend-from-coins" class="w-full bg-red-500 text-white p-3 rounded-lg font-itim hover:bg-red-600 transition-colors" data-source="coins">
+                    <button id="spend-from-coins" class="w-full bg-red-500 text-white p-3 rounded-lg font-itim hover:bg-red-600 transition-colors action-button" data-source="coins">
                         Retirar de Moedas Livres (${userData.coins} disponíveis)
                     </button>
-                    <button id="spend-from-saved" class="w-full bg-orange-500 text-white p-3 rounded-lg font-itim hover:bg-orange-600 transition-colors" data-source="saved">
+                    <button id="spend-from-saved" class="w-full bg-orange-500 text-white p-3 rounded-lg font-itim hover:bg-orange-600 transition-colors action-button" data-source="saved">
                         Retirar da Poupança (${userData.progress.savedAmount} disponíveis)
                     </button>
                 </div>
@@ -1221,7 +1270,7 @@
                         showModal("Gasto Realizado! 💸", `
                             <p class="mb-4 font-itim">**${spendAmount} moedas** foram gastas! (Categoria: ${category}).</p>
                             <div id="gemini-tip-container">
-                                <button id="get-tip-btn" class="w-full bg-purple-500 text-white p-3 rounded-lg font-itim text-lg hover:bg-purple-600 transition-colors">
+                                <button id="get-tip-btn" class="w-full bg-purple-500 text-white p-3 rounded-lg font-itim text-lg hover:bg-purple-600 transition-colors action-button">
                                     Obter Dica Financeira Mágica ✨
                                 </button>
                             </div>
@@ -1260,7 +1309,7 @@
              showModal("Doar Moedas ❤️", `
                 <p class="font-itim mb-4">Você tem **${userData.coins} moedas**. Você quer doar o valor padrão de **${donateAmount} moedas** e ajudar quem precisa?</p>
                 <div class="space-y-4">
-                    <button id="confirm-donate-btn" class="w-full bg-pink-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-pink-600 transition-colors" data-amount="${donateAmount}">
+                    <button id="confirm-donate-btn" class="w-full bg-pink-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-pink-600 transition-colors action-button" data-amount="${donateAmount}">
                         Sim, Doar Moedas
                     </button>
                 </div>
@@ -1711,8 +1760,8 @@
                     <label for="goal-name-input" class="font-bold font-itim block">Mudar o nome da meta:</label>
                     <input type="text" id="goal-name-input" value="${userData.progress.targetName}" 
                            placeholder="Ex: Bicicleta Nova, Viagem, Tablet" 
-                           class="w-full p-3 border rounded-lg font-itim text-lg">
-                    <button id="save-goal-name-btn" class="w-full bg-green-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-green-600 transition-colors">
+                           class="soft-input w-full p-3 border rounded-lg font-itim text-lg">
+                    <button id="save-goal-name-btn" class="w-full bg-green-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-green-600 transition-colors action-button">
                         Salvar Nome
                     </button>
                 </div>
@@ -1778,13 +1827,13 @@
                 const isEquipped = userData.currentEmotion.value === item.value;
                 const owned = userData.currentEmotion.shopOwned.includes(item.id) || !item.price;
                 const buttonText = isEquipped ? 'Equipado' : owned ? 'Usar' : `${item.price} Moedas`;
-                const buttonClass = isEquipped ? 'bg-green-500' : owned ? 'bg-blue-500' : 'bg-gray-400 cursor-not-allowed';
+                const buttonClass = isEquipped ? 'action-green' : owned ? 'action-blue' : 'bg-gray-400 cursor-not-allowed';
 
                 return `
-                    <div class="p-2 border rounded-lg shadow-sm text-center bg-gray-50">
+                    <div class="p-2 border rounded-lg soft-card text-center bg-gray-50">
                         <span class="text-4xl">${item.value}</span>
                         <p class="font-bold text-sm">${item.label}</p>
-                        <button class="select-emotion-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors"
+                        <button class="select-emotion-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors action-button"
                             data-value="${item.value}" data-id="${item.id}" data-price="${item.price || 0}" data-owned="${owned}">
                             ${buttonText}
                         </button>
@@ -1874,15 +1923,15 @@
                 const owned = userData.settings.themes[key]?.purchased;
                 const price = item.price;
                 const canAfford = userData.coins >= price;
-                const buttonText = owned ? 'Equipado' : price === 0 ? 'Grátis' : canAfford ? 'Comprar' : 'Moedas';
-                const buttonClass = owned ? 'bg-green-500' : price === 0 ? 'bg-blue-500' : canAfford ? 'bg-orange-500' : 'bg-gray-400 cursor-not-allowed';
+                const buttonText = owned ? (userData.settings.theme === key ? 'Equipado' : 'Usar') : price === 0 ? 'Grátis' : canAfford ? 'Comprar' : 'Moedas';
+                const buttonClass = (userData.settings.theme === key) ? 'action-green' : owned ? 'action-blue' : price === 0 ? 'action-blue' : canAfford ? 'action-red' : 'bg-gray-400 cursor-not-allowed';
                 
                 return `
-                    <div class="p-3 border rounded-lg shadow-sm text-center bg-gray-50">
-                        <div class="h-16 w-full rounded-lg mb-2 shadow-inner" style="background: linear-gradient(180deg, ${item.start} 0%, ${item.end} 100%);"></div>
+                    <div class="p-3 border rounded-lg soft-card text-center bg-gray-50">
+                        <div class="h-16 w-full rounded-lg mb-2 shadow-inner" style="background: linear-gradient(180deg, ${item.start} 0%, ${item.end} 100%); border: ${userData.settings.theme === key ? '3px solid #FFC107' : '1px solid #ddd'};"></div>
                         <p class="font-bold">${key.charAt(0).toUpperCase() + key.slice(1)}</p>
                         <p class="text-xs text-gray-500 mb-2">${owned ? 'Seu' : `${price} Moedas`}</p>
-                        <button class="shop-item-btn ${buttonClass} text-white text-sm p-2 rounded-lg w-full transition-colors"
+                        <button class="shop-item-btn ${buttonClass} text-white text-sm p-2 rounded-lg w-full transition-colors action-button"
                             data-type="theme" data-id="${key}" data-price="${price}" data-owned="${owned}">
                             ${buttonText}
                         </button>
@@ -1898,14 +1947,14 @@
                 const price = item.price;
                 const canAfford = userData.coins >= price;
                 const buttonText = isEquipped ? 'Equipado' : owned ? 'Usar' : price === 0 ? 'Grátis' : canAfford ? 'Comprar' : 'Moedas';
-                const buttonClass = isEquipped ? 'bg-green-500' : owned ? 'bg-blue-500' : price === 0 ? 'bg-blue-500' : canAfford ? 'bg-orange-500' : 'bg-gray-400 cursor-not-allowed';
+                const buttonClass = isEquipped ? 'action-green' : owned ? 'action-blue' : price === 0 ? 'action-blue' : canAfford ? 'action-red' : 'bg-gray-400 cursor-not-allowed';
                 
                 return `
-                    <div class="p-2 border rounded-lg shadow-sm text-center bg-gray-50">
+                    <div class="p-2 border rounded-lg soft-card text-center bg-gray-50">
                         <span class="text-4xl">${item.value}</span>
                         <p class="font-bold text-sm">${item.label}</p>
                         <p class="text-xs text-gray-500 mb-2">${owned ? 'Seu' : `${price} Moedas`}</p>
-                        <button class="shop-item-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors"
+                        <button class="shop-item-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors action-button"
                             data-type="pet" data-id="${item.id}" data-value="${item.value}" data-price="${price}" data-owned="${owned}">
                             ${buttonText}
                         </button>
@@ -1924,18 +1973,18 @@
                 const price = item.price;
                 const canAfford = userData.coins >= price;
                 const buttonText = isEquipped ? 'Equipado' : owned ? 'Usar' : price === 0 ? 'Grátis' : canAfford ? 'Comprar' : 'Moedas';
-                const buttonClass = isEquipped ? 'bg-green-500' : 'bg-blue-500'; // Simplificado
+                const buttonClass = isEquipped ? 'action-green' : owned ? 'action-blue' : price === 0 ? 'action-blue' : canAfford ? 'action-red' : 'bg-gray-400 cursor-not-allowed';
                 
                 const iconDisplay = item.type === 'fa-icon' 
-                    ? `<i class="fa-solid ${item.value} text-3xl"></i>` 
+                    ? `<i class="fa-solid ${item.value} text-3xl text-gray-600"></i>` 
                     : `<span class="text-3xl">${item.value}</span>`;
 
                 return `
-                    <div class="p-2 border rounded-lg shadow-sm text-center bg-gray-50">
+                    <div class="p-2 border rounded-lg soft-card text-center bg-gray-50">
                         <div class="h-10 flex items-center justify-center">${iconDisplay}</div>
                         <p class="font-bold text-sm">${item.label}</p>
                         <p class="text-xs text-gray-500 mb-2">${owned ? 'Seu' : `${price} Moedas`}</p>
-                        <button class="shop-item-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors"
+                        <button class="shop-item-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors action-button"
                             data-type="icon" data-id="${item.id}" data-value="${item.value}" data-icon-type="${item.type}" data-price="${price}" data-owned="${owned}">
                             ${buttonText}
                         </button>
@@ -1953,14 +2002,14 @@
                 const price = item.price || 0;
                 const canAfford = userData.coins >= price;
                 const buttonText = isEquipped ? 'Equipado' : owned ? 'Usar' : price === 0 ? 'Grátis' : canAfford ? 'Comprar' : 'Moedas';
-                const buttonClass = isEquipped ? 'bg-green-500' : owned ? 'bg-blue-500' : price === 0 ? 'bg-blue-500' : canAfford ? 'bg-orange-500' : 'bg-gray-400 cursor-not-allowed';
+                const buttonClass = isEquipped ? 'action-green' : owned ? 'action-blue' : price === 0 ? 'action-blue' : canAfford ? 'action-red' : 'bg-gray-400 cursor-not-allowed';
                 
                 return `
-                    <div class="p-2 border rounded-lg shadow-sm text-center bg-gray-50">
+                    <div class="p-2 border rounded-lg soft-card text-center bg-gray-50">
                         <span class="text-4xl">${item.value}</span>
                         <p class="font-bold text-sm">${item.label}</p>
                         <p class="text-xs text-gray-500 mb-2">${owned ? 'Seu' : `${price} Moedas`}</p>
-                        <button class="select-emotion-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors"
+                        <button class="select-emotion-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors action-button"
                             data-value="${item.value}" data-id="${item.id}" data-price="${price}" data-owned="${owned}">
                             ${buttonText}
                         </button>
@@ -2117,9 +2166,9 @@
             showModal("Adicionar Novo Perfil", `
                 <form id="add-child-form-modal" class="space-y-4">
                     <label for="new-child-name-input-modal" class="font-bold font-itim block">Nome da Criança:</label>
-                    <input type="text" id="new-child-name-input-modal" placeholder="Nome (Ex: Alex, Bia)" class="w-full p-3 border rounded-lg font-itim text-lg" required>
+                    <input type="text" id="new-child-name-input-modal" placeholder="Nome (Ex: Alex, Bia)" class="soft-input w-full p-3 border rounded-lg font-itim text-lg" required>
                     <p id="add-child-message" class="text-red-500 font-itim"></p>
-                    <button type="submit" id="submit-add-child-btn" class="w-full bg-purple-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-purple-600 transition-colors">
+                    <button type="submit" id="submit-add-child-btn" class="w-full bg-purple-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-purple-600 transition-colors action-button">
                         Adicionar Perfil
                     </button>
                 </form>
@@ -2203,9 +2252,8 @@
                         const iconHtml = getIconHtml(child.profileIcon, 'text-4xl', 'w-20 h-20'); 
 
                         const div = document.createElement('div');
-                        // NOVO ESTILO: Altura fixa alta (107px) e sombra (Figma)
-                        div.className = 'w-full h-[107px] p-2 bg-[#FCFCFC] rounded-lg shadow-md flex justify-between items-center transition-shadow hover:shadow-lg';
-                        div.style.boxShadow = '0px 4px 4px rgba(0, 0, 0, 0.25)'; // Sombra explícita do Figma
+                        // NOVO ESTILO: Usando soft-card para consistência
+                        div.className = 'w-full h-[107px] p-4 soft-card flex justify-between items-center';
                         
                         div.innerHTML = `
                             <div class="flex items-center space-x-3">
@@ -2220,12 +2268,12 @@
                             <div class="flex space-x-2 items-center p-1">
                                 
                                 <!-- Botão Gerenciar (Engrenagem) -->
-                                <button data-uid="${child.uid}" class="view-child-btn bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Gerenciar Perfil">
+                                <button data-uid="${child.uid}" class="view-child-btn bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center action-button" title="Gerenciar Perfil">
                                     <i class="fa-solid fa-gear text-xl"></i>
                                 </button>
                                 
                                 <!-- Botão Apagar (Lixeira) -->
-                                <button data-uid="${child.uid}" class="delete-child-btn text-red-500 bg-gray-100 hover:bg-red-100 p-2 rounded-full transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Apagar Perfil">
+                                <button data-uid="${child.uid}" class="delete-child-btn text-red-500 bg-gray-100 hover:bg-red-100 p-2 rounded-full transition-colors shadow-md w-10 h-10 flex items-center justify-center action-button" title="Apagar Perfil">
                                     <i class="fa-solid fa-trash-can text-xl"></i>
                                 </button>
                             </div>
@@ -2278,8 +2326,8 @@
                 <p class="font-itim text-2xl font-bold text-red-600 text-center">${name}</p>
                 <p class="text-sm text-center text-gray-500 mt-2">Isto irá apagar todas as moedas, tarefas e histórico desta criança.</p>
                 <div class="flex justify-center space-x-4 mt-6">
-                    <button onclick="hideModal()" class="bg-gray-300 text-gray-800 p-3 rounded-lg font-itim hover:bg-gray-400">Cancelar</button>
-                    <button id="execute-delete-btn" data-uid="${uid}" class="bg-red-600 text-white p-3 rounded-lg font-itim hover:bg-red-700">Excluir Permanentemente</button>
+                    <button onclick="hideModal()" class="bg-gray-300 text-gray-800 p-3 rounded-lg font-itim hover:bg-gray-400 action-button">Cancelar</button>
+                    <button id="execute-delete-btn" data-uid="${uid}" class="bg-red-600 text-white p-3 rounded-lg font-itim hover:bg-red-700 action-button">Excluir Permanentemente</button>
                 </div>
             `);
 
@@ -2354,7 +2402,7 @@
 
             childManagementContainer.innerHTML = `
                 
-                <div class="bg-white p-4 rounded-lg shadow-md mb-4 border-2 border-green-300">
+                <div class="soft-card p-4 mb-4 border-2 border-green-300">
                     <div class="flex items-center space-x-3 border-b pb-2 mb-3">
                         ${iconHtml} <!-- NOVO: Ícone aqui -->
                         <h4 class="text-2xl font-itim text-green-700">${child.name} <span class="ml-2 text-3xl">${currentEmotion}</span></h4>
@@ -2367,11 +2415,11 @@
                     <p class="text-xl font-itim mb-2">Poupança: <span class="text-red-500 font-bold">${savedAmount} / ${goalAmount} moedas</span></p>
 
                     <!-- NOVO: Configurar Valor da Meta -->
-                    <div class="bg-yellow-50 p-3 rounded-lg mt-3">
+                    <div class="bg-yellow-50 p-3 rounded-lg mt-3 soft-card">
                         <label for="goal-value-input" class="text-lg font-bold font-itim block mb-1">Definir Valor da Meta:</label>
                         <div class="flex space-x-2">
-                            <input type="number" id="goal-value-input" placeholder="Novo Valor em Moedas" class="w-full p-2 border rounded-lg font-itim" min="1" value="${goalAmount}">
-                            <button id="set-goal-btn" class="bg-yellow-600 text-white p-2 rounded-lg font-itim hover:bg-yellow-700">Salvar</button>
+                            <input type="number" id="goal-value-input" placeholder="Novo Valor em Moedas" class="soft-input w-full p-2 border rounded-lg font-itim" min="1" value="${goalAmount}">
+                            <button id="set-goal-btn" class="bg-yellow-600 text-white p-2 rounded-lg font-itim hover:bg-yellow-700 action-button">Salvar</button>
                         </div>
                     </div>
 
@@ -2379,28 +2427,28 @@
                 </div>
                 
                 <!-- Gerenciar Moedas (Mesada) -->
-                <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4">
+                <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4 soft-card">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Dar Mesada/Bônus</h5>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                        <input type="number" id="allowance-amount" placeholder="Qtd. Moedas" class="w-full sm:w-1/4 p-2 border rounded-lg font-itim" min="1" value="10">
-                        <input type="text" id="allowance-reason" placeholder="Motivo (Ex: Mesada Semanal)" class="w-full sm:flex-grow p-2 border rounded-lg font-itim">
-                        <button id="give-allowance-btn" class="w-full sm:w-auto bg-green-500 text-white p-2 rounded-lg font-itim hover:bg-green-600">Dar Moedas</button>
+                        <input type="number" id="allowance-amount" placeholder="Qtd. Moedas" class="soft-input w-full sm:w-1/4 p-2 border rounded-lg font-itim" min="1" value="10">
+                        <input type="text" id="allowance-reason" placeholder="Motivo (Ex: Mesada Semanal)" class="soft-input w-full sm:flex-grow p-2 border rounded-lg font-itim">
+                        <button id="give-allowance-btn" class="w-full sm:w-auto bg-green-500 text-white p-2 rounded-lg font-itim hover:bg-green-600 action-button">Dar Moedas</button>
                     </div>
                 </div>
 
                 <!-- Gerenciar Tarefas -->
-                <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4">
+                <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4 soft-card">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Criar Tarefa</h5>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                        <input type="text" id="parent-new-task-input" placeholder="Nova Tarefa (Ex: Lavar louça)" class="w-full sm:flex-grow p-2 border rounded-lg font-itim">
-                        <button id="parent-add-task-btn" class="w-full sm:w-auto bg-purple-500 text-white p-2 rounded-lg font-itim hover:bg-purple-600">Adicionar</button>
+                        <input type="text" id="parent-new-task-input" placeholder="Nova Tarefa (Ex: Lavar louça)" class="soft-input w-full sm:flex-grow p-2 border rounded-lg font-itim">
+                        <button id="parent-add-task-btn" class="w-full sm:w-auto bg-purple-500 text-white p-2 rounded-lg font-itim hover:bg-purple-600 action-button">Adicionar</button>
                     </div>
                     <h5 class="text-xl font-itim text-gray-800 mt-4 border-t pt-3">Tarefas Atuais</h5>
                     <ul id="parent-tasks-list" class="space-y-1 mt-2 max-h-40 overflow-y-auto"></ul>
                 </div>
 
                 <!-- Histórico de Transações -->
-                <div class="bg-white p-4 rounded-lg shadow-md border-t">
+                <div class="soft-card p-4 border-t">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Histórico de Transações</h5>
                     <div id="parent-child-history" class="max-h-40 overflow-y-auto border p-2 rounded bg-gray-50">
                         ${renderHistoryList(childData.transactions)}
@@ -2583,14 +2631,14 @@
     <!-- VISTAS PRINCIPAIS -->
     
     <!-- 1. VISTA DE LOGIN -->
-    <div id="login-view" class="w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
-         style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 591px; margin-top: 50px;">
+    <div id="login-view" class="w-11/12 max-w-sm p-6 soft-card flex flex-col items-center z-10" 
+         style="min-height: 591px; margin-top: 50px;">
         
         <!-- Mascote/Logo/Título -->
         <div class="flex flex-col items-center justify-center mb-8">
 
              <!-- Ícone/Toggle Simples do Figma (Usamos o toggle funcional abaixo) -->
-             <div class="w-14 h-8 bg-[#9AC0FB] rounded-full flex justify-center items-center p-1 mb-6">
+             <div class="w-14 h-8 bg-[#9AC0FB] rounded-full flex justify-center items-center p-1 mb-6 soft-card">
                  <span id="login-title-type" class="text-sm font-bold text-white font-itim">Pai</span>
             </div>
 
@@ -2600,7 +2648,7 @@
         </div>
         
         <!-- Toggle Switch Funcional (Posicionado para melhor UX) -->
-        <div class="flex items-center space-x-3 mb-6 p-2 bg-gray-100 rounded-full shadow-inner">
+        <div class="flex items-center space-x-3 mb-6 p-2 bg-gray-100 rounded-full shadow-inner soft-card">
             <span class="font-itim text-lg text-gray-600">Criança</span>
             <label class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" value="" id="login-type-toggle" class="sr-only peer" checked>
@@ -2612,29 +2660,29 @@
         <form id="login-form" class="w-full space-y-4">
             <!-- Input 1 (Email) - WRAPPED FOR DYNAMIC HIDING -->
             <div id="parent-email-input-div"> 
-                <input type="email" id="login-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+                <input type="email" id="login-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
             </div>
             
             <!-- Input 2 (Password) - WRAPPED FOR DYNAMIC HIDING -->
             <div id="parent-password-input-div">
-                <input type="password" id="login-password-input" placeholder="Senha" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+                <input type="password" id="login-password-input" placeholder="Senha" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
             </div>
             
             <!-- Input 3 (Child Code - Initially Hidden) -->
-            <input type="text" id="login-child-code-input" placeholder="Código da Criança (4 dígitos)" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base hidden" style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+            <input type="text" id="login-child-code-input" placeholder="Código da Criança (4 dígitos)" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base hidden">
             
             <p id="login-message" class="text-red-500 font-itim mt-3 text-center"></p>
 
             <!-- Botões de Ação -->
             <div class="space-y-4 pt-4">
                 <!-- Entrar (Login - Blue Figma button) -->
-                <button type="submit" id="login-btn-submit" class="w-full bg-[#9AC1FB] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-blue-400 transition-colors" style="box-shadow: 0px 0px 4px 1px #556892;">
+                <button type="submit" id="login-btn-submit" class="w-full bg-[#9AC1FB] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-blue-400 transition-colors action-button">
                     Entrar
                 </button>
                 
                 <!-- Criar Conta (Sign Up - Green Figma button) -->
                 <!-- CORREÇÃO: Usando a navegação real para a nova vista -->
-                <button type="button" onclick="showSignupView()" id="create-account-btn" class="w-full bg-[#C7F8DC] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-300 transition-colors" style="box-shadow: 0px 0px 4px 1px #6B8281;">
+                <button type="button" onclick="showSignupView()" id="create-account-btn" class="w-full bg-[#C7F8DC] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-300 transition-colors action-button">
                     Criar conta
                 </button>
             </div>
@@ -2646,8 +2694,8 @@
     </div>
 
     <!-- 2. VISTA DE CADASTRO (SIGN UP) -->
-    <div id="signup-view" class="hidden w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
-         style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 591px; margin-top: 50px;">
+    <div id="signup-view" class="hidden w-11/12 max-w-sm p-6 soft-card flex flex-col items-center z-10" 
+         style="min-height: 591px; margin-top: 50px;">
         
         <div class="flex flex-col items-center justify-center mb-6">
             <span class="text-6xl mb-2">✨</span>
@@ -2657,22 +2705,22 @@
 
         <form id="signup-form" class="w-full space-y-4">
             <!-- Nome -->
-            <input type="text" id="signup-name-input" placeholder="Seu Nome" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+            <input type="text" id="signup-name-input" placeholder="Seu Nome" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
             
             <!-- E-mail -->
-            <input type="email" id="signup-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+            <input type="email" id="signup-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
             
             <!-- Senha -->
-            <input type="password" id="signup-password-input" placeholder="Senha" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+            <input type="password" id="signup-password-input" placeholder="Senha" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
             
             <!-- Repetir Senha -->
-            <input type="password" id="signup-confirm-password-input" placeholder="Repetir Senha" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+            <input type="password" id="signup-confirm-password-input" placeholder="Repetir Senha" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
             
             <p id="signup-message" class="font-itim mt-3 text-center"></p>
 
             <!-- Botão Criar Conta (Green Figma button) -->
             <div class="space-y-4 pt-4">
-                <button type="submit" id="signup-btn-submit" class="w-full bg-[#C7F8DC] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-300 transition-colors" style="box-shadow: 0px 0px 4px 1px #6B8281;">
+                <button type="submit" id="signup-btn-submit" class="w-full bg-[#C7F8DC] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-300 transition-colors action-button">
                     Criar conta
                 </button>
             </div>
@@ -2682,8 +2730,8 @@
     </div>
 
     <!-- 3. VISTA DE ESQUECEU SENHA (FORGOT PASSWORD) -->
-     <div id="forgot-password-view" class="hidden w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
-         style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 400px; margin-top: 50px;">
+     <div id="forgot-password-view" class="hidden w-11/12 max-w-sm p-6 soft-card flex flex-col items-center z-10" 
+         style="min-height: 400px; margin-top: 50px;">
         
         <div class="flex flex-col items-center justify-center mb-8">
             <span class="text-6xl mb-2">🔑</span>
@@ -2693,13 +2741,13 @@
 
         <form id="forgot-password-form" class="w-full space-y-4">
             <!-- E-mail -->
-            <input type="email" id="reset-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+            <input type="email" id="reset-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
             
             <p id="reset-message" class="font-itim mt-3 text-center"></p>
 
             <!-- Botão Entrar (Blue Figma button) -->
             <div class="space-y-4 pt-4">
-                <button type="submit" id="reset-btn-submit" class="w-full bg-[#9AC1FB] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-blue-400 transition-colors" style="box-shadow: 0px 0px 4px 1px #556892;">
+                <button type="submit" id="reset-btn-submit" class="w-full bg-[#9AC1FB] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-blue-400 transition-colors action-button">
                     Redefinir Senha
                 </button>
             </div>
@@ -2722,19 +2770,19 @@
                  <!-- Botões de Ação Superiores (Ícones) -->
                  <div class="flex space-x-2 pt-2">
                     <!-- Botão Add Criança -->
-                    <button onclick="renderAddChildModal()" class="bg-purple-500 text-white p-3 rounded-full hover:bg-purple-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Adicionar Criança">
+                    <button onclick="renderAddChildModal()" class="bg-purple-500 text-white p-3 rounded-full hover:bg-purple-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center action-button" title="Adicionar Criança">
                         <i class="fa-solid fa-plus text-xl"></i>
                     </button>
                     <!-- Botão Sair -->
-                    <button onclick="parentLogout()" class="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Sair do Dashboard">
+                    <button onclick="parentLogout()" class="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center action-button" title="Sair do Dashboard">
                         <i class="fa-solid fa-right-from-bracket text-xl"></i>
                     </button>
                 </div>
             </div>
 
             <!-- Cartão Principal (Figma white card) -->
-            <!-- Ajustado top/bottom para usar a altura total disponível -->
-            <div class="bg-[#FCFCFC] p-4 rounded-xl shadow-2xl absolute inset-x-4 bottom-4 top-[120px] z-10 overflow-y-auto" style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25);">
+            <!-- Ajustado top/bottom para usar a altura total disponível e usando soft-card -->
+            <div class="soft-card p-4 absolute inset-x-4 bottom-4 top-[120px] z-10 overflow-y-auto">
                 
                 <h3 class="text-2xl font-itim text-blue-700 mb-3">Perfis Registrados</h3>
                 <div id="parent-children-list" class="space-y-4">
@@ -2750,7 +2798,7 @@
             <!-- HEADER DO GERENCIAMENTO (Simplificado) -->
             <div class="flex justify-start items-center mb-4 pb-3 border-b">
                 <!-- Botão Voltar (Ícone Único) -->
-                <button onclick="showParentHome()" class="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Voltar">
+                <button onclick="showParentHome()" class="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center action-button" title="Voltar">
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <h1 class="text-2xl font-itim text-blue-800 ml-4">Gerenciamento</h1>
@@ -2763,7 +2811,7 @@
     </div>
 
     <!-- APP DA CRIANÇA (VISTA PRINCIPAL) -->
-    <div id="child-app-view" class="hidden w-full max-w-sm p-4 bg-white rounded-xl shadow-2xl mobile-card relative overflow-hidden">
+    <div id="child-app-view" class="hidden w-full max-w-sm p-4 soft-card mobile-card relative overflow-hidden">
         
         <!-- NOVO: Botão de Sair no canto superior direito -->
         <button id="child-logout-btn" class="absolute top-4 right-4 z-20 text-red-600 text-2xl p-2 rounded-full hover:bg-red-100 transition-colors">
@@ -2772,28 +2820,29 @@
 
         <!-- Animação Mascote e Moedas -->
         <div class="flex flex-col items-center justify-center pt-8 pb-4 relative">
-             <p id="piggy-greeting" class="absolute top-0 text-lg font-itim bg-yellow-100 p-2 rounded-lg transition-opacity opacity-0 text-center z-10">Olá!</p>
+             <p id="piggy-greeting" class="absolute top-0 text-lg font-itim bg-yellow-100 p-2 rounded-lg transition-opacity opacity-0 text-center z-10 soft-card">Olá!</p>
             
             <div id="animated-piggy-container" class="w-24 h-24 flex items-center justify-center relative">
                 <span id="piggy-character" class="piggy-character text-7xl">🐷</span>
             </div>
 
-            <div class="flex items-center space-x-3 mt-2">
-                <span class="text-6xl text-orange-500 font-itim" id="coin-count">0</span>
+            <div class="flex items-center space-x-3 mt-4">
+                <!-- Moedas maiores e em destaque -->
+                <span class="text-7xl text-orange-500 font-itim font-extrabold" id="coin-count">0</span>
                 <i class="fa-solid fa-coins text-yellow-500 text-4xl"></i>
             </div>
         </div>
 
         <!-- Cartão de Perfil -->
-        <div class="bg-gray-100 p-4 rounded-xl shadow-inner mt-4">
+        <div class="soft-card p-4 mt-4 border-2 border-gray-100">
             <div class="flex items-center space-x-4">
-                <div id="profile-icon-container" class="w-16 h-16 rounded-full overflow-hidden profile-placeholder flex items-center justify-center">
+                <div id="profile-icon-container" class="w-16 h-16 rounded-full overflow-hidden profile-placeholder flex items-center justify-center border-4 border-white">
                     <i class="fa-solid fa-user-astronaut text-4xl text-gray-500"></i>
                 </div>
                 <div>
                     <div class="flex items-center space-x-2">
                         <h2 id="user-name" class="text-3xl font-itim text-gray-800">Alex</h2>
-                        <div id="emotion-display-container" class="text-3xl p-1 cursor-pointer transition-transform hover:scale-110 active:scale-95" aria-label="Selecione sua Emoção">😊</div>
+                        <div id="emotion-display-container" class="text-3xl p-1 cursor-pointer transition-transform hover:scale-110 active:scale-95 soft-card rounded-full" aria-label="Selecione sua Emoção">😊</div>
                     </div>
                     <!-- NOVO: Exibição separada para o nome e valor da meta -->
                     <p id="coin-goal" class="text-sm font-itim text-gray-600 mt-1 cursor-pointer" id="goal-section">
@@ -2805,13 +2854,14 @@
         </div>
 
         <!-- Seção de Progresso e Tarefas -->
-        <div class="bg-white p-4 rounded-xl shadow-lg mt-6">
+        <div class="soft-card p-4 mt-6">
             <h3 class="text-xl font-itim text-gray-700 mb-3">Progresso</h3>
             
             <!-- Barra de Progresso (Poupança) -->
             <div class="mb-4 cursor-pointer" id="goal-section">
-                <div class="w-full bg-gray-200 rounded-full h-3">
-                    <div id="progress-bar" class="h-3 rounded-full bg-green-500 transition-all duration-500" style="width: 0%;"></div>
+                <div class="w-full bg-gray-300 rounded-full h-4">
+                    <!-- Cantos mais arredondados para a barra de progresso -->
+                    <div id="progress-bar" class="h-4 rounded-full bg-green-500 transition-all duration-500" style="width: 0%;"></div>
                 </div>
                 <div class="flex justify-between mt-1 text-sm font-itim text-gray-600">
                     <span>Poupança</span>
@@ -2820,7 +2870,7 @@
             </div>
 
             <!-- Tarefas -->
-            <div class="p-3 border rounded-lg shadow-sm cursor-pointer" id="tasks-edit-section">
+            <div class="p-3 border rounded-xl soft-card cursor-pointer" id="tasks-edit-section">
                 <div class="flex justify-between items-center">
                     <span class="text-lg font-itim text-gray-800">Tarefas Diárias</span>
                     <span class="text-lg font-itim text-purple-600"><span id="tasks-done">0</span>/<span id="tasks-total">0</span></span>
@@ -2828,48 +2878,46 @@
             </div>
             
             <!-- Lista Rápida de Tarefas (Escondida, renderizada via JS) -->
-            <ul id="tasks-list" class="mt-3 max-h-40 overflow-y-auto border rounded-lg divide-y divide-gray-200">
+            <ul id="tasks-list" class="mt-3 max-h-40 overflow-y-auto border rounded-xl divide-y divide-gray-200 soft-card">
                 <!-- Tarefas injetadas aqui -->
             </ul>
         </div>
         
         <!-- Botões de Ação (Ganhar, Poupar, Gastar, Doar) -->
+        <!-- Uso de classes action-button e cores puras -->
         <div class="grid grid-cols-4 gap-3 mt-8 pb-4">
             
             <!-- Ganhar (Jogo) -->
-            <div id="action-ganhar" class="action-button bg-[#32CD32] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
+            <button id="action-ganhar" class="action-button action-green p-3 flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-gamepad text-3xl"></i>
                 <span id="earn-text" class="text-sm font-itim mt-1">Ganhar</span>
                 <span id="earn-amount" class="text-xs font-bold">+10</span>
-            </div>
+            </button>
 
             <!-- Poupar (Permite escolher valor) -->
-            <div id="action-poupar" class="action-button bg-[#9AC1FB] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
+            <button id="action-poupar" class="action-button action-blue p-3 flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-sack-dollar text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Poupar</span>
                 <span id="save-amount" class="text-xs font-bold">Mudar</span>
-            </div>
+            </button>
 
             <!-- Gastar (Loja Mágica) -->
-            <div id="action-gastar" class="action-button bg-[#FF6B6B] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
+            <button id="action-gastar" class="action-button action-red p-3 flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-store text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Gastar</span>
                 <span id="spend-amount" class="text-xs font-bold">Comprar</span>
-            </div>
+            </button>
 
             <!-- Doar (Conquistas/Badges) -->
-            <div id="action-doar" class="action-button bg-[#FBBC04] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
+            <button id="action-doar" class="action-button action-yellow p-3 flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-trophy text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Conquistas</span>
                 <span id="donate-amount" class="text-xs font-bold">Ver</span>
-            </div>
+            </button>
         </div>
         
-        <!-- Botão de Ação Auxiliar (REMOVIDO BOTÃO DOAR MOEDAS) -->
+        <!-- Botão de Ação Auxiliar -->
         <div class="flex justify-center space-x-4 mt-4">
-            <!-- <button onclick="renderDonateModal()" class="text-sm text-pink-600 font-itim hover:text-pink-800 transition-colors">
-                <i class="fa-solid fa-heart mr-1"></i> Doar Moedas
-            </button> -->
             <button onclick="renderHistoryModal()" class="text-sm text-gray-600 font-itim hover:text-gray-800 transition-colors">
                 <i class="fa-solid fa-clock-rotate-left mr-1"></i> Histórico
             </button>
@@ -2878,7 +2926,7 @@
 
 
     <!-- SIDEBAR (Mantida para fins de re-uso no futuro, mas sem botão para abrir) -->
-    <div id="sidebar" class="sidebar fixed top-0 left-0 w-64 h-full bg-white shadow-2xl transform -translate-x-full p-4 flex flex-col justify-between z-50">
+    <div id="sidebar" class="sidebar fixed top-0 left-0 w-64 h-full bg-white shadow-2xl transform -translate-x-full p-4 flex flex-col justify-between z-50 soft-card">
         <div>
             <div class="flex justify-between items-center border-b pb-3 mb-4">
                 <h3 class="text-2xl font-itim text-blue-600">Menu Mágico</h3>
@@ -2888,15 +2936,15 @@
             </div>
             
             <ul class="space-y-3 font-itim text-lg">
-                <li id="menu-profile" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors"><i class="fa-solid fa-user mr-3"></i> Perfil e Ícone</li>
-                <li id="menu-shop" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors"><i class="fa-solid fa-store mr-3"></i> Loja Mágica</li>
-                <li id="menu-badges" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors"><i class="fa-solid fa-trophy mr-3"></i> Conquistas</li>
-                <li id="menu-history" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors"><i class="fa-solid fa-clock-rotate-left mr-3"></i> Histórico</li>
-                <li id="menu-themes" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors"><i class="fa-solid fa-palette mr-3"></i> Temas</li>
+                <li id="menu-profile" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors soft-card"><i class="fa-solid fa-user mr-3"></i> Perfil e Ícone</li>
+                <li id="menu-shop" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors soft-card"><i class="fa-solid fa-store mr-3"></i> Loja Mágica</li>
+                <li id="menu-badges" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors soft-card"><i class="fa-solid fa-trophy mr-3"></i> Conquistas</li>
+                <li id="menu-history" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors soft-card"><i class="fa-solid fa-clock-rotate-left mr-3"></i> Histórico</li>
+                <li id="menu-themes" class="cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-colors soft-card"><i class="fa-solid fa-palette mr-3"></i> Temas</li>
             </ul>
         </div>
 
-        <button id="menu-logout" class="bg-red-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-red-600 transition-colors w-full">
+        <button id="menu-logout" class="bg-red-500 text-white p-3 rounded-lg font-itim text-xl hover:bg-red-600 transition-colors w-full action-button">
             <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair
         </button>
     </div>
@@ -2923,7 +2971,7 @@
             <canvas id="game-canvas" width="300" height="400" class="mb-3"></canvas>
             <p class="font-itim text-lg mb-2">Pontuação: <span id="game-score" class="font-bold text-orange-500">0</span></p>
             <p id="game-message" class="font-itim text-sm text-center text-gray-600 mb-3">Use setas ou clique para pular!</p>
-            <button onclick="gameOver()" class="bg-red-500 text-white p-2 rounded-lg font-itim hover:bg-red-600">Sair do Jogo</button>
+            <button onclick="gameOver()" class="bg-red-500 text-white p-2 rounded-lg font-itim hover:bg-red-600 action-button">Sair do Jogo</button>
         </div>
     </div>
 </body>
