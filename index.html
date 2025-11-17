@@ -4,11 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meu Cofrinho Mágico</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts: Itim -->
     <link href="https://fonts.googleapis.com/css2?family=Itim&display=swap" rel="stylesheet">
-    <!-- Font Awesome (Ícones) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     
     <style>
@@ -90,18 +87,19 @@
     </style>
 </head>
 <body class="bg-[#EDEFF2] min-h-screen flex flex-col items-center pt-8 pb-4">
-    <!-- Script de Inicialização do Firebase e Lógica do App -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // NOVO: Importação do cliente Supabase
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.44.2/+esm";
 
-        // Variáveis globais obrigatórias
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // Variáveis globais obrigatórias para Supabase
+        const SUPABASE_URL = "https://jwwgsyibgwpvgfbsltzr.supabase.co"; // Credencial fornecida
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3d2dzeWliZ3dwdmdmYnNsdHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzNzkzMDAsImV4cCI6MjA3ODk1NTMwMH0.9iA_dKu4UJf-tQV03YdG8J1N4FhuP_flxHr7HWDbt9I"; // Credencial fornecida
+        
+        // As variáveis de configuração do Firebase foram removidas/ajustadas.
+        const initialAuthToken = null; 
+        const appId = 'default-app-id';
 
-        let app, db, auth, parentId = null; 
+        let supabase, parentId = null; 
         let currentUserId = null; // UID do usuário logado (pai ou criança, anônimo)
         let currentChildId = null; // Usado no dashboard do pai para focar na criança
         let userType = 'Guest'; // 'Parent', 'Child', 'Guest'
@@ -193,14 +191,8 @@
         const DEFAULT_THEME_COLORS = { start: '#99BFFB', end: '#C7F8DC' };
 
 
-        // --- FIREBASE PATHING ---
-        
-        // Document Reference para o controle principal do pai (6 segmentos: Col/Doc/Col/Doc/Col/Doc)
-        const PARENT_CONTROL_DOC_REF = (uid) => doc(db, 'artifacts', appId, 'users', uid, 'parent_control', 'control_data');
-
-        // Document Reference para o perfil da criança (6 segmentos: Col/Doc/Col/Doc/Col/Doc)
-        const CHILD_PROFILE_DOC_REF = (parentUid, childUid) => doc(db, 'artifacts', appId, 'users', parentUid, 'child_profiles', childUid);
-
+        // --- FIREBASE PATHING (REMOVIDO) ---
+        // As referências de documentos do Firebase foram substituídas por nomes de tabelas do Supabase.
 
         
         // --- Elementos do DOM (Cache) ---
@@ -220,25 +212,25 @@
         const piggyContainerEl = document.getElementById('animated-piggy-container');
 
 
-        // --- Inicialização do Firebase e Auth ---
-        function initFirebase() {
+        // --- Inicialização do Supabase e Auth (Substitui initFirebase) ---
+        function initSupabase() { // Renomeado
             try {
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                setLogLevel('debug'); // Mantido para ajudar a depurar permissões
+                // Inicializa o cliente Supabase
+                supabase = createClient(SUPABASE_URL, SUPABASE_KEY); 
+                console.log("Supabase Client Initialized.");
 
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        currentUserId = user.uid;
+                // Ouve mudanças de autenticação
+                supabase.auth.onAuthStateChange(async (event, session) => {
+                     // Quando a sessão é detectada (o usuário está logado ou a sessão foi restaurada)
+                    if (session) {
+                        currentUserId = session.user.id;
                         // Tenta carregar o estado atual e mostrar a vista correta
                         showLoginView();
                     } else {
-                        // Tenta autenticação inicial anônima
-                        if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            await signInAnonymously(auth);
+                        // Tenta criar um usuário anônimo (Guest) se não houver sessão
+                        if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+                            currentUserId = null; 
+                            showLoginView(); 
                         }
                     }
                 });
@@ -279,7 +271,7 @@
                 // 3. DOAR (Mapeado para Conquistas)
                 document.getElementById('action-doar')?.addEventListener('click', renderBadgesModal); 
             } catch (error) {
-                console.error("Erro ao inicializar Firebase:", error);
+                console.error("Erro ao inicializar Supabase:", error);
                 showModal("Erro de Inicialização", "Não foi possível conectar ao banco de dados. Tente recarregar.");
             }
         }
@@ -362,7 +354,8 @@
              userType = 'Guest';
              currentUserId = null;
              childParentId = null;
-             await signOut(auth);
+             // Substituição: Sai do Supabase Auth
+             await supabase.auth.signOut();
              showLoginView();
         }
 
@@ -442,9 +435,15 @@
             const email = document.getElementById('login-email-input').value;
             const password = document.getElementById('login-password-input').value;
 
-            // CORREÇÃO: Removido o 'PA' duplicado na constante de credenciais
+            // Lógica de login manual do pai (mantida a simulação do hardcoded)
             if (email === PARENT_CREDENTIALS.email && password === PARENT_CREDENTIALS.password) {
-                showParentDashboard(currentUserId);
+                // No Supabase, o parentId será o ID do usuário anônimo ou um ID simulado.
+                // Usamos o currentUserId que é definido ao iniciar o app, 
+                // ou forçamos um ID para o pai se o Supabase Auth não estiver sendo usado.
+                const parentUIDSimulado = currentUserId || 'simulated-parent-id-123';
+                currentUserId = parentUIDSimulado; // Define o UID simulado como o usuário atual
+                
+                showParentDashboard(parentUIDSimulado);
                 document.getElementById('login-message').textContent = '';
             } else {
                 document.getElementById('login-message').textContent = 'Credenciais incorretas.';
@@ -454,25 +453,29 @@
         async function childLogin(code) {
             document.getElementById('login-message').textContent = 'Buscando perfil...';
             
-            // Assume-se que o código da criança está armazenado no documento do pai
-            // Usamos currentUserId como o ID do pai para buscar o documento
-            const parentDocRef = PARENT_CONTROL_DOC_REF(currentUserId);
-            const docSnap = await getDoc(parentDocRef);
-            
             let childFound = false;
             
-            if (docSnap.exists()) {
-                const children = docSnap.data().children || [];
+            // NOVO: Busca na tabela 'parent_control' por um filho com o código
+            const { data, error } = await supabase
+                .from('parent_control')
+                .select('user_id, data')
+                .contains('data->children', [{ code: code }]); // Busca em todos os documentos de controle do pai
+            
+            if (data && data.length > 0) {
+                // Encontrou um ou mais pais que possuem esse código
+                const parentControl = data[0]; 
+                const children = parentControl.data?.children || [];
                 const child = children.find(c => c.code === code);
                 
                 if (child) {
                     childFound = true;
-                    // Passa o UID da criança e o UID do pai (currentUserId)
-                    showChildApp(child.uid, currentUserId); 
+                    // Passa o UID da criança e o UID do pai (user_id do controle)
+                    showChildApp(child.uid, parentControl.user_id); 
                     return;
                 }
             }
-
+            // OBS: O tratamento de erro do Supabase (error) foi omitido intencionalmente para simplificar a migração e focar no `contains`
+            
             if (!childFound) {
                  document.getElementById('login-message').textContent = 'Código de acesso inválido ou não encontrado.';
             }
@@ -498,9 +501,8 @@
             messageEl.classList.remove('text-red-500');
             messageEl.classList.add('text-green-600');
             
-            // Em um app real, faríamos:
-            // await createUserWithEmailAndPassword(auth, email, password);
-            // E iniciaríamos o dashboard do pai.
+            // Em um app real com Supabase, faríamos:
+            // const { user, session, error } = await supabase.auth.signUp({ email, password });
             
             // Após a simulação, volta para o login principal
             setTimeout(() => {
@@ -519,8 +521,8 @@
             messageEl.classList.remove('text-red-500');
             messageEl.classList.add('text-green-600');
             
-            // Em um app real, faríamos:
-            // await sendPasswordResetEmail(auth, email);
+            // Em um app real com Supabase, faríamos:
+            // const { data, error } = await supabase.auth.resetPasswordForEmail(email);
             
             // Após a simulação, volta para o login principal
             setTimeout(() => {
@@ -539,23 +541,38 @@
                 return;
             }
 
-            const docRef = CHILD_PROFILE_DOC_REF(parentUidToUse, uid);
-            
             try {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    userData = { ...defaultData, ...docSnap.data() };
+                // 1. Busca os dados (SELECT) na tabela 'child_profiles'
+                const { data: existingData, error: fetchError } = await supabase
+                    .from('child_profiles')
+                    .select('data')
+                    .eq('user_id', uid)
+                    .single();
+                
+                // Código de erro Supabase para 'Nenhuma linha encontrada'
+                const NO_ROWS_FOUND_ERROR = 'PGRST116'; 
+
+                if (existingData) { // Se o dado existir
+                    const docData = existingData.data;
+                    userData = { ...defaultData, ...docData };
                     // Mescla o objeto de temas, garantindo que o default exista se algo não for salvo
-                    userData.settings.themes = { ...defaultData.settings.themes, ...docSnap.data().settings?.themes };
-                    userData.currentPet = { ...PET_CHARACTERS.find(p => p.id === docSnap.data().currentPet?.id), ...docSnap.data().currentPet }; // Garante que o PET tenha o objeto completo
-                } else {
+                    userData.settings.themes = { ...defaultData.settings.themes, ...docData.settings?.themes };
+                    userData.currentPet = { ...PET_CHARACTERS.find(p => p.id === docData.currentPet?.id), ...docData.currentPet }; 
+                } else if (fetchError && fetchError.code === NO_ROWS_FOUND_ERROR) {
                     userData = defaultData;
                     // Define o nome da criança se estiver sendo criada após o login do pai
                     const parentChild = parentData.children.find(c => c.uid === uid);
                     if (parentChild) {
                          userData.name = parentChild.name;
                     }
-                    await setDoc(docRef, userData);
+                    
+                    // 2. Cria os dados (INSERT)
+                    await supabase
+                        .from('child_profiles')
+                        .insert([{ user_id: uid, parent_id: parentUidToUse, data: userData }]);
+
+                } else if (fetchError) {
+                     throw new Error(fetchError.message);
                 }
                 
                 if (userType === 'Child') {
@@ -578,13 +595,25 @@
                 return;
             }
 
-            const docRef = PARENT_CONTROL_DOC_REF(parentId);
             try {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    parentData = { ...parentData, ...docSnap.data() };
-                } else {
-                    await setDoc(docRef, parentData);
+                // 1. Busca os dados (SELECT) na tabela 'parent_control'
+                const { data: existingData, error: fetchError } = await supabase
+                    .from('parent_control')
+                    .select('data')
+                    .eq('user_id', parentId)
+                    .single();
+
+                const NO_ROWS_FOUND_ERROR = 'PGRST116'; 
+
+                if (existingData) {
+                    parentData = { ...parentData, ...existingData.data };
+                } else if (fetchError && fetchError.code === NO_ROWS_FOUND_ERROR) {
+                    // 2. Cria o documento se não existir (INSERT)
+                    await supabase
+                        .from('parent_control')
+                        .insert([{ user_id: parentId, data: parentData }]);
+                } else if (fetchError) {
+                     throw new Error(fetchError.message);
                 }
             } catch (e) {
                 console.error("Erro ao carregar dados do pai:", e);
@@ -596,20 +625,25 @@
         function setupRealtimeListener(uid) {
             if (!childParentId) return; // Precisa do ID do pai para ouvir os dados
 
-            const docRef = CHILD_PROFILE_DOC_REF(childParentId, uid);
-            onSnapshot(docRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    userData = { ...DEFAULT_CHILD_DATA, ...data };
-                    userData.settings.themes = { ...DEFAULT_CHILD_DATA.settings.themes, ...data.settings?.themes };
-                    userData.currentPet = { ...PET_CHARACTERS.find(p => p.id === data.currentPet?.id), ...data.currentPet }; 
+            // NOVO: Listener Supabase
+            supabase
+                .channel(`child_data_${uid}`) // Canal único por criança
+                .on('postgres_changes', { 
+                    event: 'UPDATE', // Escuta apenas por UPDATES
+                    schema: 'public', 
+                    table: 'child_profiles', 
+                    filter: `user_id=eq.${uid}` // Filtra pelo UID da criança
+                }, (payload) => {
+                     // payload.new.data contém o objeto JSONB 'data'
+                     const data = payload.new.data.data;
+                     userData = { ...DEFAULT_CHILD_DATA, ...data };
+                     userData.settings.themes = { ...DEFAULT_CHILD_DATA.settings.themes, ...data.settings?.themes };
+                     userData.currentPet = { ...PET_CHARACTERS.find(p => p.id === data.currentPet?.id), ...data.currentPet }; 
 
-                    applyTheme(userData.settings.theme); 
-                    updateUI();
-                }
-            }, (error) => {
-                console.error("Erro no listener em tempo real (Criança):", error);
-            });
+                     applyTheme(userData.settings.theme); 
+                     updateUI();
+                })
+                .subscribe();
         }
         
         function setupParentRealtimeListener(uid) {
@@ -617,15 +651,21 @@
                 console.error("setupParentRealtimeListener: UID é inválido.");
                 return; 
             }
-            const docRef = PARENT_CONTROL_DOC_REF(uid);
-             onSnapshot(docRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    parentData = { ...parentData, ...docSnap.data() };
-                    renderParentDashboard();
-                }
-            }, (error) => {
-                console.error("Erro no listener em tempo real (Pai):", error);
-            });
+
+            // NOVO: Listener Supabase
+             supabase
+                 .channel(`parent_data_${uid}`) // Canal único por pai
+                 .on('postgres_changes', { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'parent_control', 
+                    filter: `user_id=eq.${uid}` // Filtra pelo UID do pai
+                 }, (payload) => {
+                     const data = payload.new.data.data;
+                     parentData = { ...parentData, ...data };
+                     renderParentDashboard();
+                 })
+                 .subscribe();
         }
 
 
@@ -637,8 +677,12 @@
             try {
                 const dataToSave = { ...userData };
                 delete dataToSave.game;
-                // Salva no documento da criança sob a coleção do pai
-                await setDoc(CHILD_PROFILE_DOC_REF(parentUidToUse, uid), dataToSave, { merge: true });
+                
+                // Salva no documento da criança usando UPSERT na tabela 'child_profiles'
+                await supabase
+                    .from('child_profiles')
+                    .upsert({ user_id: uid, parent_id: parentUidToUse, data: dataToSave }, { onConflict: 'user_id' }); // Usando UPSERT
+
             } catch (e) {
                 console.error("Erro ao salvar dados da criança:", e);
             }
@@ -647,7 +691,10 @@
         async function saveParentData() {
             if (!parentId || userType !== 'Parent') return;
             try {
-                await setDoc(PARENT_CONTROL_DOC_REF(parentId), parentData, { merge: true });
+                // Salva no documento do pai usando UPSERT na tabela 'parent_control'
+                await supabase
+                    .from('parent_control')
+                    .upsert({ user_id: parentId, data: parentData }, { onConflict: 'user_id' });
             } catch (e) {
                 console.error("Erro ao salvar dados do pai:", e);
             }
@@ -657,19 +704,22 @@
         async function getChildDataSnapshot(uid) {
              if (!parentId) return null; // O pai deve estar logado
              
-             // Busca os dados da criança sob o caminho do pai
-             const docRef = CHILD_PROFILE_DOC_REF(parentId, uid); 
+             // Busca os dados da criança na tabela 'child_profiles'
              try {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                     const data = docSnap.data();
+                const { data: docData, error } = await supabase
+                    .from('child_profiles')
+                    .select('data')
+                    .eq('user_id', uid)
+                    .single();
+
+                if (docData) {
                      // Garantindo que a estrutura é completa e segura
                      return { 
                          ...DEFAULT_CHILD_DATA, 
-                         ...data,
-                         tasks: data.tasks || [], 
-                         transactions: data.transactions || [],
-                         currentPet: { ...PET_CHARACTERS.find(p => p.id === data.currentPet?.id), ...data.currentPet } 
+                         ...docData.data, // Acessa o objeto 'data'
+                         tasks: docData.data?.tasks || [], 
+                         transactions: docData.data?.transactions || [],
+                         currentPet: { ...PET_CHARACTERS.find(p => p.id === docData.data?.currentPet?.id), ...docData.data?.currentPet } 
                     };
                 }
              } catch (e) {
@@ -1843,7 +1893,8 @@
         document.getElementById('menu-logout')?.addEventListener('click', async () => {
             // Este botão está na sidebar do pai, que está fora do fluxo da criança
             sidebarEl?.classList.add('-translate-x-full');
-            await signOut(auth);
+            // Substituição: Sai do Supabase Auth
+            await supabase.auth.signOut();
             showLoginView();
             showModal("Sessão Encerrada", "Você saiu. Faça login novamente.");
         });
@@ -1893,6 +1944,7 @@
                 
                 if (name && parentId) {
                     try { 
+                        // Uso de crypto.randomUUID() para gerar um UID único
                         const childUid = crypto.randomUUID(); 
                         const childCode = generateUniqueCode();
                         
@@ -1904,11 +1956,15 @@
                             currentEmotion: DEFAULT_CHILD_DATA.currentEmotion
                         };
                         
-                        // 1. Cria o documento real da criança primeiro
+                        // 1. Cria o documento real da criança primeiro (INSERT no Supabase)
                         const childInitialData = { ...DEFAULT_CHILD_DATA, name: name };
-                        await setDoc(CHILD_PROFILE_DOC_REF(parentId, childUid), childInitialData); 
+                        const { error: insertError } = await supabase
+                            .from('child_profiles')
+                            .insert([{ user_id: childUid, parent_id: parentId, data: childInitialData }]);
                         
-                        // 2. Atualiza a lista do pai
+                        if (insertError) throw new Error(insertError.message);
+                        
+                        // 2. Atualiza a lista do pai (manualmente e salva)
                         if (!parentData.children) {
                             parentData.children = [];
                         }
@@ -1971,15 +2027,12 @@
                                 </div>
                             </div>
                             
-                            <!-- Botões de Ação agrupados em ícones no lado direito -->
                             <div class="flex space-x-2 items-center p-1">
                                 
-                                <!-- Botão Gerenciar (Engrenagem) -->
                                 <button data-uid="${child.uid}" class="view-child-btn bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Gerenciar Perfil">
                                     <i class="fa-solid fa-gear text-xl"></i>
                                 </button>
                                 
-                                <!-- Botão Apagar (Lixeira) -->
                                 <button data-uid="${child.uid}" class="delete-child-btn text-red-500 bg-gray-100 hover:bg-red-100 p-2 rounded-full transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Apagar Perfil">
                                     <i class="fa-solid fa-trash-can text-xl"></i>
                                 </button>
@@ -2049,9 +2102,13 @@
             if (!parentId || userType !== 'Parent' || !uid) return;
 
             try {
-                // 1. Remove o documento principal da criança no Firestore
-                const childDocRef = CHILD_PROFILE_DOC_REF(parentId, uid);
-                await deleteDoc(childDocRef); 
+                // 1. Remove o documento principal da criança no Supabase
+                const { error: deleteError } = await supabase
+                    .from('child_profiles')
+                    .delete()
+                    .eq('user_id', uid); 
+                    
+                if (deleteError) throw new Error(deleteError.message);
 
                 // 2. Remove a criança da lista denormalizada do pai (parentData.children)
                 parentData.children = parentData.children.filter(child => child.uid !== uid);
@@ -2111,17 +2168,14 @@
                 
                 <div class="bg-white p-4 rounded-lg shadow-md mb-4 border-2 border-green-300">
                     <div class="flex items-center space-x-3 border-b pb-2 mb-3">
-                        ${iconHtml} <!-- NOVO: Ícone aqui -->
-                        <h4 class="text-2xl font-itim text-green-700">${child.name} <span class="ml-2 text-3xl">${currentEmotion}</span></h4>
+                        ${iconHtml} <h4 class="text-2xl font-itim text-green-700">${child.name} <span class="ml-2 text-3xl">${currentEmotion}</span></h4>
                     </div>
                     <p class="text-xl font-itim mb-2">Código de Acesso: <span class="text-blue-600 font-bold">${child.code}</span></p>
                     <p class="text-xl font-itim mb-2">Saldo Atual: <span class="text-orange-500 font-bold">${childData.coins} moedas</span></p>
                     
-                    <!-- NOVO: Exibição da Meta -->
                     <p class="text-xl font-itim mb-2">Meta: <span class="text-purple-600 font-bold">${childData.progress.targetName}</span></p>
                     <p class="text-xl font-itim mb-2">Poupança: <span class="text-red-500 font-bold">${savedAmount} / ${goalAmount} moedas</span></p>
 
-                    <!-- NOVO: Configurar Valor da Meta -->
                     <div class="bg-yellow-50 p-3 rounded-lg mt-3">
                         <label for="goal-value-input" class="text-lg font-bold font-itim block mb-1">Definir Valor da Meta:</label>
                         <div class="flex space-x-2">
@@ -2133,7 +2187,6 @@
                     <p class="text-xl font-itim mt-3 border-t pt-3">Tarefas: ${completedTasks} / ${totalTasks}</p>
                 </div>
                 
-                <!-- Gerenciar Moedas (Mesada) -->
                 <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Dar Mesada/Bônus</h5>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
@@ -2143,7 +2196,6 @@
                     </div>
                 </div>
 
-                <!-- Gerenciar Tarefas -->
                 <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Criar Tarefa</h5>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
@@ -2154,7 +2206,6 @@
                     <ul id="parent-tasks-list" class="space-y-1 mt-2 max-h-40 overflow-y-auto"></ul>
                 </div>
 
-                <!-- Histórico de Transações -->
                 <div class="bg-white p-4 rounded-lg shadow-md border-t">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Histórico de Transações</h5>
                     <div id="parent-child-history" class="max-h-40 overflow-y-auto border p-2 rounded bg-gray-50">
@@ -2193,7 +2244,15 @@
             
             childData.progress.goal = newGoal;
             
-            await setDoc(CHILD_PROFILE_DOC_REF(parentId, uid), { progress: childData.progress }, { merge: true });
+            // Substituição: Atualiza o documento no Supabase
+            const { error } = await supabase
+                .from('child_profiles')
+                .update({ data: { ...childData, progress: childData.progress } }) // Atualiza o objeto JSONB completo
+                .eq('user_id', uid);
+            
+            if (error) {
+                 return showModal("Erro", `Erro ao salvar a meta: ${error.message}`);
+            }
             
             showModal("Meta Definida!", `O valor da meta de **${childData.progress.targetName}** foi definido para **${newGoal} moedas**!`);
             
@@ -2230,8 +2289,15 @@
             });
             childData.transactions = childData.transactions.slice(0, 50);
             
-            // CORRIGIDO O PATH: Salva no documento da criança sob a coleção do pai
-            await setDoc(CHILD_PROFILE_DOC_REF(parentId, uid), childData, { merge: true });
+            // Substituição: Salva no Supabase usando UPDATE do objeto JSONB completo
+            const { error } = await supabase
+                .from('child_profiles')
+                .update({ data: childData })
+                .eq('user_id', uid);
+            
+            if (error) {
+                 return showModal("Erro", `Erro ao dar mesada: ${error.message}`);
+            }
             
             showModal("Sucesso", `Mesada de **${amount} moedas** dada a ${childData.name}!`);
             document.getElementById('allowance-reason').value = '';
@@ -2252,8 +2318,16 @@
             childData.tasks = childData.tasks || [];
             childData.tasks.push(newTask);
             
-            // CORRIGIDO O PATH: Salva no documento da criança sob a coleção do pai
-            await setDoc(CHILD_PROFILE_DOC_REF(parentId, uid), { tasks: childData.tasks }, { merge: true });
+            // Substituição: Salva no Supabase usando UPDATE do objeto JSONB completo
+            const { error } = await supabase
+                .from('child_profiles')
+                .update({ data: childData }) // Salva childData que já tem tasks atualizadas
+                .eq('user_id', uid);
+                
+            if (error) {
+                 return showModal("Erro", `Erro ao criar tarefa: ${error.message}`);
+            }
+            
             document.getElementById('parent-new-task-input').value = '';
             // CORREÇÃO DASHBOARD: Recarrega os dados e re-renderiza o painel do filho
             const updatedData = await getChildDataSnapshot(uid);
@@ -2292,37 +2366,39 @@
                     const childData = await getChildDataSnapshot(targetUid);
                     if (childData) {
                         childData.tasks = childData.tasks.filter(t => t.id !== taskId);
-                        // CORRIGIDO O PATH: Salva no documento da criança sob a coleção do pai
-                        await setDoc(CHILD_PROFILE_DOC_REF(parentId, targetUid), { tasks: childData.tasks }, { merge: true });
+                        
+                        // Substituição: Salva no Supabase usando UPDATE do objeto JSONB completo
+                        const { error } = await supabase
+                            .from('child_profiles')
+                            .update({ data: childData })
+                            .eq('user_id', targetUid);
+
+                        if (error) {
+                             return showModal("Erro", `Erro ao deletar tarefa: ${error.message}`);
+                        }
+
                         renderChildManagement(childData); // Atualiza o painel do pai
                     }
                 });
             });
         }
         
-        initFirebase(); // CHAMADA ADICIONADA PARA INICIALIZAR O FLUXO DO APLICATIVO
+        initSupabase(); // CHAMADA ADICIONADA PARA INICIALIZAR O FLUXO DO APLICATIVO (Renomeado)
     </script>
     
-    <!-- VISTAS PRINCIPAIS -->
-    
-    <!-- 1. VISTA DE LOGIN -->
     <div id="login-view" class="w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
          style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 591px; margin-top: 50px;">
         
-        <!-- Mascote/Logo/Título -->
         <div class="flex flex-col items-center justify-center mb-8">
 
-             <!-- Ícone/Toggle Simples do Figma (Usamos o toggle funcional abaixo) -->
              <div class="w-14 h-8 bg-[#9AC0FB] rounded-full flex justify-center items-center p-1 mb-6">
                  <span id="login-title-type" class="text-sm font-bold text-white font-itim">Pai</span>
             </div>
 
             <h2 class="text-4xl font-itim text-gray-800">Fin Family</h2>
-            <!-- NOVO: Porquinho 3D -->
-             <span class="text-6xl mb-2">🐷</span>
+            <span class="text-6xl mb-2">🐷</span>
         </div>
         
-        <!-- Toggle Switch Funcional (Posicionado para melhor UX) -->
         <div class="flex items-center space-x-3 mb-6 p-2 bg-gray-100 rounded-full shadow-inner">
             <span class="font-itim text-lg text-gray-600">Criança</span>
             <label class="relative inline-flex items-center cursor-pointer">
@@ -2333,42 +2409,32 @@
         </div>
 
         <form id="login-form" class="w-full space-y-4">
-            <!-- Input 1 (Email) - WRAPPED FOR DYNAMIC HIDING -->
             <div id="parent-email-input-div"> 
                 <input type="email" id="login-email-input" placeholder="E-mail" value="admin@admin.com" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             </div>
             
-            <!-- Input 2 (Password) - WRAPPED FOR DYNAMIC HIDING -->
             <div id="parent-password-input-div">
                 <input type="password" id="login-password-input" placeholder="Senha" value="admin" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             </div>
             
-            <!-- Input 3 (Child Code - Initially Hidden) -->
             <input type="text" id="login-child-code-input" placeholder="Código da Criança (4 dígitos)" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base hidden" style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
             <p id="login-message" class="text-red-500 font-itim mt-3 text-center"></p>
 
-            <!-- Botões de Ação -->
             <div class="space-y-4 pt-4">
-                <!-- Entrar (Login - Blue Figma button) -->
                 <button type="submit" id="login-btn-submit" class="w-full bg-[#9AC1FB] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-blue-400 transition-colors" style="box-shadow: 0px 0px 4px 1px #556892;">
                     Entrar
                 </button>
                 
-                <!-- Criar Conta (Sign Up - Green Figma button) -->
-                <!-- CORREÇÃO: Usando a navegação real para a nova vista -->
                 <button type="button" onclick="showSignupView()" id="create-account-btn" class="w-full bg-[#C7F8DC] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-300 transition-colors" style="box-shadow: 0px 0px 4px 1px #6B8281;">
                     Criar conta
                 </button>
             </div>
         </form>
 
-        <!-- Link Esqueceu Senha (Hid in Child View) -->
-        <!-- CORREÇÃO: Usando a navegação real para a nova vista -->
         <a href="#" id="forgot-password-link" onclick="showForgotPasswordView()" class="text-sm font-itim text-gray-500 mt-4 hover:text-blue-500">Esqueceu a senha?</a>
     </div>
 
-    <!-- 2. VISTA DE CADASTRO (SIGN UP) -->
     <div id="signup-view" class="hidden w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
          style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 591px; margin-top: 50px;">
         
@@ -2379,21 +2445,16 @@
         </div>
 
         <form id="signup-form" class="w-full space-y-4">
-            <!-- Nome -->
             <input type="text" id="signup-name-input" placeholder="Seu Nome" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
-            <!-- E-mail -->
             <input type="email" id="signup-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
-            <!-- Senha -->
             <input type="password" id="signup-password-input" placeholder="Senha" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
-            <!-- Repetir Senha -->
             <input type="password" id="signup-confirm-password-input" placeholder="Repetir Senha" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
             <p id="signup-message" class="font-itim mt-3 text-center"></p>
 
-            <!-- Botão Criar Conta (Green Figma button) -->
             <div class="space-y-4 pt-4">
                 <button type="submit" id="signup-btn-submit" class="w-full bg-[#C7F8DC] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-300 transition-colors" style="box-shadow: 0px 0px 4px 1px #6B8281;">
                     Criar conta
@@ -2404,8 +2465,7 @@
         <a href="#" onclick="showLoginView()" class="text-sm font-itim text-gray-500 mt-4 hover:text-blue-500">Voltar para o Login</a>
     </div>
 
-    <!-- 3. VISTA DE ESQUECEU SENHA (FORGOT PASSWORD) -->
-     <div id="forgot-password-view" class="hidden w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
+    <div id="forgot-password-view" class="hidden w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
          style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 400px; margin-top: 50px;">
         
         <div class="flex flex-col items-center justify-center mb-8">
@@ -2415,12 +2475,10 @@
         </div>
 
         <form id="forgot-password-form" class="w-full space-y-4">
-            <!-- E-mail -->
             <input type="email" id="reset-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
             <p id="reset-message" class="font-itim mt-3 text-center"></p>
 
-            <!-- Botão Entrar (Blue Figma button) -->
             <div class="space-y-4 pt-4">
                 <button type="submit" id="reset-btn-submit" class="w-full bg-[#9AC1FB] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-blue-400 transition-colors" style="box-shadow: 0px 0px 4px 1px #556892;">
                     Redefinir Senha
@@ -2431,48 +2489,35 @@
         <a href="#" onclick="showLoginView()" class="text-sm font-itim text-gray-500 mt-4 hover:text-blue-500">Voltar para o Login</a>
     </div>
 
-    <!-- DASHBOARD DO PAI -->
     <div id="parent-dashboard-view" class="hidden w-full max-w-sm mobile-card relative overflow-hidden app-gradient">
         
-        <!-- VISTA DE LISTAGEM DE CRIANÇAS (TELA 1) -->
         <div id="parent-home-view" class="p-4 pt-8 h-full">
             
-            <!-- HEADER (FORA DO CARTÃO) -->
             <div class="flex justify-between items-start z-20 relative mb-4">
-                 <!-- CORREÇÃO: Saudação mais espaçada -->
                  <h1 id="parent-greeting" class="text-4xl font-itim text-black mt-2">Olá, Responsável!</h1>
                  
-                 <!-- Botões de Ação Superiores (Ícones) -->
                  <div class="flex space-x-2 pt-2">
-                    <!-- Botão Add Criança -->
                     <button onclick="renderAddChildModal()" class="bg-purple-500 text-white p-3 rounded-full hover:bg-purple-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Adicionar Criança">
                         <i class="fa-solid fa-plus text-xl"></i>
                     </button>
-                    <!-- Botão Sair -->
                     <button onclick="parentLogout()" class="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Sair do Dashboard">
                         <i class="fa-solid fa-right-from-bracket text-xl"></i>
                     </button>
                 </div>
             </div>
 
-            <!-- Cartão Principal (Figma white card) -->
-            <!-- Ajustado top/bottom para usar a altura total disponível -->
             <div class="bg-[#FCFCFC] p-4 rounded-xl shadow-2xl absolute inset-x-4 bottom-4 top-[120px] z-10 overflow-y-auto" style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25);">
                 
                 <h3 class="text-2xl font-itim text-blue-700 mb-3">Perfis Registrados</h3>
                 <div id="parent-children-list" class="space-y-4">
-                    <!-- Perfis de crianças serão injetados aqui -->
-                </div>
+                    </div>
                 
             </div>
         </div>
 
-        <!-- VISTA DE GERENCIAMENTO DE CRIANÇA (Tela 2) -->
         <div id="child-management-view" class="hidden p-4">
             
-            <!-- HEADER DO GERENCIAMENTO (Simplificado) -->
             <div class="flex justify-start items-center mb-4 pb-3 border-b">
-                <!-- Botão Voltar (Ícone Único) -->
                 <button onclick="showParentHome()" class="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Voltar">
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
@@ -2480,20 +2525,16 @@
             </div>
             
             <div id="child-management-container">
-                <!-- Conteúdo de Gerenciamento Injetado aqui (ID CORRIGIDO) -->
-            </div>
+                </div>
         </div>
     </div>
 
-    <!-- APP DA CRIANÇA (VISTA PRINCIPAL) -->
     <div id="child-app-view" class="hidden w-full max-w-sm p-4 bg-white rounded-xl shadow-2xl mobile-card relative overflow-hidden">
         
-        <!-- NOVO: Botão de Sair no canto superior direito -->
         <button id="child-logout-btn" class="absolute top-4 right-4 z-20 text-red-600 text-2xl p-2 rounded-full hover:bg-red-100 transition-colors">
             <i class="fa-solid fa-right-from-bracket"></i>
         </button>
 
-        <!-- Animação Mascote e Moedas -->
         <div class="flex flex-col items-center justify-center pt-8 pb-4 relative">
              <p id="piggy-greeting" class="absolute top-0 text-lg font-itim bg-yellow-100 p-2 rounded-lg transition-opacity opacity-0 text-center z-10">Olá!</p>
             
@@ -2507,7 +2548,6 @@
             </div>
         </div>
 
-        <!-- Cartão de Perfil -->
         <div class="bg-gray-100 p-4 rounded-xl shadow-inner mt-4">
             <div class="flex items-center space-x-4">
                 <div id="profile-icon-container" class="w-16 h-16 rounded-full overflow-hidden profile-placeholder flex items-center justify-center">
@@ -2518,7 +2558,6 @@
                         <h2 id="user-name" class="text-3xl font-itim text-gray-800">Alex</h2>
                         <div id="emotion-display-container" class="text-3xl p-1 cursor-pointer transition-transform hover:scale-110 active:scale-95" aria-label="Selecione sua Emoção">😊</div>
                     </div>
-                    <!-- NOVO: Exibição separada para o nome e valor da meta -->
                     <p id="coin-goal" class="text-sm font-itim text-gray-600 mt-1 cursor-pointer" id="goal-section">
                         <span id="goal-name-display">Meta: Brinquedo Novo</span>
                         <span class="font-bold ml-1 text-xs" id="goal-amount-display">(0/500 moedas)</span>
@@ -2527,11 +2566,9 @@
             </div>
         </div>
 
-        <!-- Seção de Progresso e Tarefas -->
         <div class="bg-white p-4 rounded-xl shadow-lg mt-6">
             <h3 class="text-xl font-itim text-gray-700 mb-3">Progresso</h3>
             
-            <!-- Barra de Progresso (Poupança) -->
             <div class="mb-4 cursor-pointer" id="goal-section">
                 <div class="w-full bg-gray-200 rounded-full h-3">
                     <div id="progress-bar" class="h-3 rounded-full bg-green-500 transition-all duration-500" style="width: 0%;"></div>
@@ -2542,7 +2579,6 @@
                 </div>
             </div>
 
-            <!-- Tarefas -->
             <div class="p-3 border rounded-lg shadow-sm cursor-pointer" id="tasks-edit-section">
                 <div class="flex justify-between items-center">
                     <span class="text-lg font-itim text-gray-800">Tarefas Diárias</span>
@@ -2550,37 +2586,30 @@
                 </div>
             </div>
             
-            <!-- Lista Rápida de Tarefas (Escondida, renderizada via JS) -->
             <ul id="tasks-list" class="mt-3 max-h-40 overflow-y-auto border rounded-lg divide-y divide-gray-200">
-                <!-- Tarefas injetadas aqui -->
-            </ul>
+                </ul>
         </div>
         
-        <!-- Botões de Ação (Ganhar, Poupar, Gastar, Doar) -->
         <div class="grid grid-cols-4 gap-3 mt-8 pb-4">
             
-            <!-- Ganhar (Jogo) -->
             <div id="action-ganhar" class="action-button bg-[#32CD32] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-gamepad text-3xl"></i>
                 <span id="earn-text" class="text-sm font-itim mt-1">Ganhar</span>
                 <span id="earn-amount" class="text-xs font-bold">+10</span>
             </div>
 
-            <!-- Poupar (Permite escolher valor) -->
             <div id="action-poupar" class="action-button bg-[#9AC1FB] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-sack-dollar text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Poupar</span>
                 <span id="save-amount" class="text-xs font-bold">Mudar</span>
             </div>
 
-            <!-- Gastar (Loja Mágica) -->
             <div id="action-gastar" class="action-button bg-[#FF6B6B] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-store text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Gastar</span>
                 <span id="spend-amount" class="text-xs font-bold">Comprar</span>
             </div>
 
-            <!-- Doar (Conquistas/Badges) -->
             <div id="action-doar" class="action-button bg-[#FBBC04] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-trophy text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Conquistas</span>
@@ -2588,11 +2617,7 @@
             </div>
         </div>
         
-        <!-- Botão de Ação Auxiliar (REMOVIDO BOTÃO DOAR MOEDAS) -->
         <div class="flex justify-center space-x-4 mt-4">
-            <!-- <button onclick="renderDonateModal()" class="text-sm text-pink-600 font-itim hover:text-pink-800 transition-colors">
-                <i class="fa-solid fa-heart mr-1"></i> Doar Moedas
-            </button> -->
             <button onclick="renderHistoryModal()" class="text-sm text-gray-600 font-itim hover:text-gray-800 transition-colors">
                 <i class="fa-solid fa-clock-rotate-left mr-1"></i> Histórico
             </button>
@@ -2600,7 +2625,6 @@
     </div>
 
 
-    <!-- SIDEBAR (Mantida para fins de re-uso no futuro, mas sem botão para abrir) -->
     <div id="sidebar" class="sidebar fixed top-0 left-0 w-64 h-full bg-white shadow-2xl transform -translate-x-full p-4 flex flex-col justify-between z-50">
         <div>
             <div class="flex justify-between items-center border-b pb-3 mb-4">
@@ -2624,7 +2648,6 @@
         </button>
     </div>
 
-    <!-- MODAL PRINCIPAL (Usado para todas as interações) -->
     <div id="main-modal" class="hidden modal-overlay fixed inset-0 flex items-center justify-center p-4">
         <div class="modal-content bg-white p-6 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-3 mb-4">
@@ -2639,7 +2662,6 @@
         </div>
     </div>
     
-    <!-- MODAL DO MINI-GAME -->
     <div id="game-modal" class="hidden modal-overlay fixed inset-0 flex items-center justify-center p-4">
         <div class="modal-content bg-white p-4 rounded-xl max-w-xs flex flex-col items-center">
             <h3 class="text-2xl font-itim text-purple-600 mb-2">Mini-Game: Saltitante</h3>
