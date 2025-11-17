@@ -833,6 +833,17 @@
                      }
                      throw new Error(fetchError.message);
                 }
+                
+                // NOVO: Sobrescreve o nome com o nome do Auth (se disponível)
+                const { data: userData, error: userError } = await supabase.auth.getUser();
+                if (userData?.user?.user_metadata?.full_name) {
+                    parentData.name = userData.user.user_metadata.full_name.split(' ')[0]; // Pega o primeiro nome
+                } else if (userData?.user?.email) {
+                    parentData.name = userData.user.email.split('@')[0]; // Pega o nome do email
+                } else {
+                    parentData.name = "Responsável"; // Fallback
+                }
+                
             } catch (e) {
                 console.error("Erro ao carregar dados do pai:", e);
                 // O modal é exibido dentro do bloco try/catch interno se for erro de tabela, senão, aqui.
@@ -2237,9 +2248,10 @@
             
             // DEFESA CRÍTICA: Inicializa os elementos e usa try/catch para evitar tela em branco
             if (childrenListEl) childrenListEl.innerHTML = '';
+            
+            // ATUALIZADO: Usando parentData.name, que agora deve ser o primeiro nome
             if (parentGreetingEl) {
-                 const parentFirstName = parentData.name.split(' ')[0] || 'Responsável';
-                 parentGreetingEl.textContent = `Olá, ${parentFirstName}!`;
+                 parentGreetingEl.textContent = `Olá, ${parentData.name}!`;
             }
             
             try {
@@ -2765,6 +2777,7 @@
             <!-- HEADER (FORA DO CARTÃO) -->
             <div class="flex justify-between items-start z-20 relative mb-4">
                  <!-- CORREÇÃO: Saudação mais espaçada -->
+                 <!-- ATUALIZADO: O JS agora define o nome correto aqui -->
                  <h1 id="parent-greeting" class="text-4xl font-itim text-black mt-2">Olá, Responsável!</h1>
                  
                  <!-- Botões de Ação Superiores (Ícones) -->
