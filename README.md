@@ -17,9 +17,3 @@ Transformar conceitos financeiros complexos (como ganhar, poupar, gastar e metas
 | **Backend/DB** | **Supabase** (PostgreSQL, Realtime, RLS) | Banco de Dados, Autenticação e Sincronização em Tempo Real |
 | **Ícones** | Font Awesome | Ícones de Perfil e Ações |
 | **Integração** | Gemini API (Simulada) | Dicas financeiras e motivacionais após gastos |
-
----
-
-## 📂 Estrutura Modular do Código
-
-O código foi dividido em módulos para facilitar a manutenção e o desenvolvimento (ES Modules), substituindo o bloco `<script type="module">` único.
