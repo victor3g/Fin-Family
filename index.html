@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meu Cofrinho Mágico</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Itim -->
     <link href="https://fonts.googleapis.com/css2?family=Itim&display=swap" rel="stylesheet">
+    <!-- Font Awesome (Ícones) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     
     <style>
@@ -87,15 +90,15 @@
     </style>
 </head>
 <body class="bg-[#EDEFF2] min-h-screen flex flex-col items-center pt-8 pb-4">
+    <!-- Script de Inicialização do Supabase e Lógica do App -->
     <script type="module">
         // NOVO: Importação do cliente Supabase
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.44.2/+esm";
 
-        // Variáveis globais obrigatórias para Supabase
-        const SUPABASE_URL = "https://jwwgsyibgwpvgfbsltzr.supabase.co"; // Credencial fornecida
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3d2dzeWliZ3dwdmdmYnNsdHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzNzkzMDAsImV4cCI6MjA3ODk1NTMwMH0.9iA_dKu4UJf-tQV03YdG8J1N4FhuP_flxHr7HWDbt9I"; // Credencial fornecida
+        // Variáveis globais obrigatórias para Supabase (CREDENCIAIS FORNECIDAS)
+        const SUPABASE_URL = "https://jwwgsyibgwpvgfbsltzr.supabase.co"; 
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3d2dzeWliZ3dwdmdmYnNsdHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzNzkzMDAsImV4cCI6MjA3ODk1NTMwMH0.9iA_dKu4UJf-tQV03YdG8J1N4FhuP_flxHr7HWDbt9I"; 
         
-        // As variáveis de configuração do Firebase foram removidas/ajustadas.
         const initialAuthToken = null; 
         const appId = 'default-app-id';
 
@@ -105,10 +108,11 @@
         let userType = 'Guest'; // 'Parent', 'Child', 'Guest'
         let childParentId = null; // O ID do pai que possui os dados da criança logada
 
-        // Credenciais do Pai (Solicitado pelo usuário)
+        // Credenciais do Pai (Simulação)
+        // REMOVIDO: HARDCODED - Não é mais usado para login, pois usamos o Supabase Auth.
         const PARENT_CREDENTIALS = { email: 'admin@admin.com', password: 'admin' };
         
-        // NOVO: Constante de duração da recarga do jogo (6 horas)
+        // Constante de duração da recarga do jogo (6 horas)
         const COOLDOWN_DURATION_MS = 6 * 60 * 60 * 1000; 
 
         // --- CONSTANTES ---
@@ -162,7 +166,6 @@
             badges: [], 
             lastInterestDate: Date.now(), 
             donationCount: 0, 
-            gameCooldownEndTime: 0, 
             progress: { goal: 500, targetName: "Brinquedo Novo", savedAmount: 0 },
             profileIcon: { type: 'fa-icon', value: 'fa-user-astronaut', shopOwned: [] },
             currentEmotion: { value: '😊', shopOwned: [] },
@@ -191,10 +194,6 @@
         const DEFAULT_THEME_COLORS = { start: '#99BFFB', end: '#C7F8DC' };
 
 
-        // --- FIREBASE PATHING (REMOVIDO) ---
-        // As referências de documentos do Firebase foram substituídas por nomes de tabelas do Supabase.
-
-        
         // --- Elementos do DOM (Cache) ---
         const userNameEl = document.getElementById('user-name');
         const coinCountEl = document.getElementById('coin-count');
@@ -211,20 +210,56 @@
         const piggyGreetingEl = document.getElementById('piggy-greeting');
         const piggyContainerEl = document.getElementById('animated-piggy-container');
 
+        // --- FUNÇÃO PARA TESTAR A CONEXÃO E RLS (NOVO) ---
+        async function testSupabaseConnection() {
+            console.log("A testar a conexão com Supabase...");
+            try {
+                // Tenta buscar um item que deve existir (neste caso, tentamos ler a tabela principal)
+                const { error, status } = await supabase
+                    .from('parent_control')
+                    .select('user_id', { head: true }); 
+
+                if (error) {
+                    let errorMessage = error.message;
+                    if (status === 404 || errorMessage.includes('Could not find the table')) {
+                         errorMessage = `**Tabela Inexistente!** Você precisa criar a tabela **parent_control** e **child_profiles** na sua base Supabase (esquema public) com uma coluna 'user_id' (TEXT/UUID) e 'data' (JSONB).`;
+                    } else if (errorMessage.includes('permission denied') || status === 401) {
+                         errorMessage = `**Erro de Permissão (RLS)!** O usuário anônimo (Anon Key) não tem permissão de leitura. Habilite o RLS nas tabelas **parent_control** e **child_profiles** e crie uma política de SELECT para 'anon'.`;
+                    }
+                    
+                    console.error("ERRO de Conexão Supabase:", error.message);
+                    showModal("ERRO de Configuração Supabase", errorMessage);
+                    return false;
+                }
+
+                console.log("Conexão Supabase BEM-SUCEDIDA.");
+                // O modal de sucesso é removido para que o usuário veja a tela de login.
+                // showModal("Conexão OK! ✨", "O cliente Supabase conectou com sucesso. Próximo passo: fazer login como 'Pai'.");
+                return true;
+
+            } catch (e) {
+                console.error("ERRO CRÍTICO de Inicialização Supabase:", e);
+                showModal("ERRO CRÍTICO de Conexão", "Não foi possível conectar ao Supabase. Verifique URL/KEY e a sua conexão de rede.");
+                return false;
+            }
+        }
+
 
         // --- Inicialização do Supabase e Auth (Substitui initFirebase) ---
-        function initSupabase() { // Renomeado
+        function initSupabase() { 
             try {
                 // Inicializa o cliente Supabase
                 supabase = createClient(SUPABASE_URL, SUPABASE_KEY); 
                 console.log("Supabase Client Initialized.");
 
+                // Adiciona a chamada de teste após a inicialização
+                testSupabaseConnection();
+                
                 // Ouve mudanças de autenticação
                 supabase.auth.onAuthStateChange(async (event, session) => {
                      // Quando a sessão é detectada (o usuário está logado ou a sessão foi restaurada)
                     if (session) {
                         currentUserId = session.user.id;
-                        // Tenta carregar o estado atual e mostrar a vista correta
                         showLoginView();
                     } else {
                         // Tenta criar um usuário anônimo (Guest) se não houver sessão
@@ -431,22 +466,37 @@
             }
         });
         
-        function parentLogin() {
+        async function parentLogin() {
             const email = document.getElementById('login-email-input').value;
             const password = document.getElementById('login-password-input').value;
+            const messageEl = document.getElementById('login-message');
 
-            // Lógica de login manual do pai (mantida a simulação do hardcoded)
-            if (email === PARENT_CREDENTIALS.email && password === PARENT_CREDENTIALS.password) {
-                // No Supabase, o parentId será o ID do usuário anônimo ou um ID simulado.
-                // Usamos o currentUserId que é definido ao iniciar o app, 
-                // ou forçamos um ID para o pai se o Supabase Auth não estiver sendo usado.
-                const parentUIDSimulado = currentUserId || 'simulated-parent-id-123';
-                currentUserId = parentUIDSimulado; // Define o UID simulado como o usuário atual
-                
-                showParentDashboard(parentUIDSimulado);
-                document.getElementById('login-message').textContent = '';
+            messageEl.textContent = 'A fazer login...';
+            messageEl.classList.remove('text-red-500');
+
+            // --- CORREÇÃO: USAR SUPABASE AUTH PARA LOGIN DO PAI ---
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (error) {
+                console.error("Erro de login Supabase:", error);
+                messageEl.textContent = 'Credenciais incorretas. Tente novamente.';
+                messageEl.classList.add('text-red-500');
+                return;
+            }
+
+            if (data.user) {
+                // Login bem-sucedido. Define o currentUserId real e navega.
+                currentUserId = data.user.id;
+                messageEl.textContent = 'Login bem-sucedido!';
+                messageEl.classList.remove('text-red-500');
+                showParentDashboard(currentUserId);
             } else {
-                document.getElementById('login-message').textContent = 'Credenciais incorretas.';
+                // Caso em que o Supabase Auth não retorna erro, mas também não retorna usuário (raro, mas cauteloso)
+                messageEl.textContent = 'Credenciais incorretas. Tente novamente.';
+                messageEl.classList.add('text-red-500');
             }
         }
 
@@ -455,33 +505,42 @@
             
             let childFound = false;
             
-            // NOVO: Busca na tabela 'parent_control' por um filho com o código
+            // --- CORREÇÃO DE BUSCA DO SUPABASE ---
+            // 1. Busca TODOS os documentos de controle do pai para checar o código localmente.
+            // Isso exige permissão de SELECT (ALL) na tabela parent_control (já configurada no RLS).
             const { data, error } = await supabase
                 .from('parent_control')
-                .select('user_id, data')
-                .contains('data->children', [{ code: code }]); // Busca em todos os documentos de controle do pai
+                .select('user_id, data');
+            
+            if (error) {
+                console.error("Erro ao buscar perfis de pai:", error);
+                document.getElementById('login-message').textContent = 'Erro de comunicação com o banco de dados.';
+                return;
+            }
             
             if (data && data.length > 0) {
-                // Encontrou um ou mais pais que possuem esse código
-                const parentControl = data[0]; 
-                const children = parentControl.data?.children || [];
-                const child = children.find(c => c.code === code);
-                
-                if (child) {
-                    childFound = true;
-                    // Passa o UID da criança e o UID do pai (user_id do controle)
-                    showChildApp(child.uid, parentControl.user_id); 
-                    return;
+                // 2. Itera sobre os documentos (pais) para encontrar o código da criança
+                for (const parentControl of data) {
+                    const parentId = parentControl.user_id;
+                    const children = parentControl.data?.children || [];
+                    
+                    const child = children.find(c => c.code === code);
+                    
+                    if (child) {
+                        childFound = true;
+                        // Encontrado! Passa o UID da criança (child.uid) e o ID do pai (parentId)
+                        showChildApp(child.uid, parentId); 
+                        return;
+                    }
                 }
             }
-            // OBS: O tratamento de erro do Supabase (error) foi omitido intencionalmente para simplificar a migração e focar no `contains`
             
             if (!childFound) {
                  document.getElementById('login-message').textContent = 'Código de acesso inválido ou não encontrado.';
             }
         }
         
-        // --- NOVO: LÓGICA DE CADASTRO E RECUPERAÇÃO (SIMULAÇÃO FUNCIONAL) ---
+        // --- NOVO: LÓGICA DE CADASTRO E RECUPERAÇÃO (REAL) ---
         
         document.getElementById('signup-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -496,19 +555,46 @@
                 return;
             }
             
-            // Simulação de Cadastro BEM-SUCEDIDO
-            messageEl.textContent = `Conta criada para ${email}! (Simulação). Use esta tela para Login.`;
-            messageEl.classList.remove('text-red-500');
-            messageEl.classList.add('text-green-600');
-            
-            // Em um app real com Supabase, faríamos:
-            // const { user, session, error } = await supabase.auth.signUp({ email, password });
-            
-            // Após a simulação, volta para o login principal
-            setTimeout(() => {
-                showLoginView();
-                // Opcional: pré-preencher o email de login aqui
-            }, 2000);
+            messageEl.textContent = 'A criar conta...';
+            messageEl.classList.remove('text-red-500', 'text-green-600');
+            messageEl.classList.add('text-gray-600');
+
+            // 1. Tenta criar o usuário no Supabase Auth
+            const { data, error } = await supabase.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    data: { full_name: name },
+                    // CORREÇÃO: Força o redirecionamento para o URL atual do Canvas
+                    redirectTo: window.location.origin + window.location.pathname
+                }
+            });
+
+            if (error) {
+                console.error("Erro ao cadastrar:", error);
+                messageEl.textContent = `Erro ao criar conta: ${error.message}`;
+                messageEl.classList.remove('text-gray-600');
+                messageEl.classList.add('text-red-500');
+                return;
+            }
+
+            if (data.user) {
+                // 2. Se a conta foi criada, exibe sucesso e volta para login
+                // A mensagem assume que a confirmação por e-mail foi desativada no dashboard.
+                messageEl.textContent = `Conta criada com sucesso! Faça login abaixo.`;
+                messageEl.classList.remove('text-gray-600');
+                messageEl.classList.add('text-green-600');
+                
+                // Redireciona após 3 segundos.
+                setTimeout(() => {
+                    showLoginView();
+                }, 3000);
+            } else {
+                 // Caso de erro genérico sem lançamento de exceção (ex: e-mail já existe)
+                 messageEl.textContent = "Erro: Usuário já existe ou outro problema. Verifique o console.";
+                 messageEl.classList.remove('text-gray-600');
+                 messageEl.classList.add('text-red-500');
+            }
         });
 
         document.getElementById('forgot-password-form')?.addEventListener('submit', async (e) => {
@@ -516,22 +602,101 @@
             const email = document.getElementById('reset-email-input').value;
             const messageEl = document.getElementById('reset-message');
             
-            // Simulação de Recuperação BEM-SUCEDIDA
-            messageEl.textContent = `Link de redefinição enviado para ${email}! (Simulação)`;
-            messageEl.classList.remove('text-red-500');
+            messageEl.textContent = 'A enviar link...';
+            messageEl.classList.remove('text-red-500', 'text-green-600');
+            messageEl.classList.add('text-gray-600');
+
+            // 1. Envia o link de redefinição de senha
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                 // Redirecionar após o clique no link (opcional)
+                 // redirectTo: 'SUA_URL_DE_REDIRECIONAMENTO' 
+            });
+
+            if (error) {
+                 console.error("Erro ao redefinir senha:", error);
+                 messageEl.textContent = `Erro: ${error.message}`;
+                 messageEl.classList.remove('text-gray-600');
+                 messageEl.classList.add('text-red-500');
+                 return;
+            }
+            
+            messageEl.textContent = `Link de redefinição enviado para **${email}**!`;
+            messageEl.classList.remove('text-gray-600');
             messageEl.classList.add('text-green-600');
             
-            // Em um app real com Supabase, faríamos:
-            // const { data, error } = await supabase.auth.resetPasswordForEmail(email);
-            
-            // Após a simulação, volta para o login principal
+            // Após o envio, volta para o login principal
             setTimeout(() => {
                  showLoginView();
-            }, 2000);
+            }, 3000);
         });
 
 
         // --- Persistência de Dados (Geral) ---
+
+        // Função auxiliar para aplicar mesclagem profunda em objetos aninhados (settings, currentPet)
+        function deepMergeUserData(targetData, sourceData) {
+            const merged = { ...targetData }; // Começa com os defaults ou dados atuais
+            
+            // Mesclagem simples para propriedades de primeiro nível (coins, name, tasks, transactions, etc.)
+            Object.assign(merged, sourceData); 
+
+            // --- CORREÇÃO DE MESCLAGEM PROFUNDA E NOME ---
+            
+            // 1. Mesclagem profunda para SETTINGS
+            if (sourceData.settings) {
+                merged.settings = { 
+                    ...targetData.settings, 
+                    ...sourceData.settings,
+                    themes: { // Mesclagem profunda para THEMES
+                        ...targetData.settings.themes,
+                        ...sourceData.settings.themes
+                    }
+                };
+            } else {
+                 merged.settings = merged.settings || targetData.settings || DEFAULT_CHILD_DATA.settings;
+            }
+            
+            // 2. Mesclagem de CURRENT PET (garantindo que o PET tenha o objeto completo)
+            const petId = sourceData.currentPet?.id || merged.currentPet?.id;
+            if (petId) {
+                 // Mescla as propriedades do PET DEFAULT + propriedades salvas
+                 merged.currentPet = { 
+                     ...PET_CHARACTERS.find(p => p.id === petId) || DEFAULT_CHILD_DATA.currentPet,
+                     ...sourceData.currentPet 
+                 };
+            }
+
+            // 3. Mesclagem de Profile Icon
+            if (sourceData.profileIcon) {
+                merged.profileIcon = { ...targetData.profileIcon, ...sourceData.profileIcon };
+            }
+
+            // 4. Mesclagem de Current Emotion
+            if (sourceData.currentEmotion) {
+                 merged.currentEmotion = { ...targetData.currentEmotion, ...sourceData.currentEmotion };
+            }
+
+            // 5. Assegura que o nome esteja sempre correto (prioriza o nome do registro do pai)
+            const childInfoInParent = parentData.children.find(c => c.uid === merged.user_id);
+            if (childInfoInParent) {
+                 merged.name = childInfoInParent.name;
+            } else if (sourceData.name && sourceData.name !== DEFAULT_CHILD_DATA.name) {
+                 // Use o nome do dado se não houver um registro de pai correspondente
+                 merged.name = sourceData.name;
+            } else if (targetData.name && targetData.name !== DEFAULT_CHILD_DATA.name) {
+                 // Mantém o nome anterior se for válido
+                 merged.name = targetData.name;
+            } else {
+                 // Fallback final
+                 merged.name = DEFAULT_CHILD_DATA.name;
+            }
+            
+            // 6. Atualiza o UID se estiver faltando
+            if (!merged.user_id) merged.user_id = sourceData.user_id;
+
+            return merged;
+        }
+
         async function loadOrCreateUserData(uid, defaultData) {
             // Usa childParentId para encontrar os dados da criança no caminho do pai
             const parentUidToUse = userType === 'Child' ? childParentId : parentId;
@@ -554,10 +719,11 @@
 
                 if (existingData) { // Se o dado existir
                     const docData = existingData.data;
-                    userData = { ...defaultData, ...docData };
-                    // Mescla o objeto de temas, garantindo que o default exista se algo não for salvo
-                    userData.settings.themes = { ...defaultData.settings.themes, ...docData.settings?.themes };
-                    userData.currentPet = { ...PET_CHARACTERS.find(p => p.id === docData.currentPet?.id), ...docData.currentPet }; 
+                    
+                    // --- APLICA MESCLAGEM PROFUNDA ---
+                    userData = deepMergeUserData(defaultData, { ...docData, user_id: uid });
+                    // ---------------------------------
+                    
                 } else if (fetchError && fetchError.code === NO_ROWS_FOUND_ERROR) {
                     userData = defaultData;
                     // Define o nome da criança se estiver sendo criada após o login do pai
@@ -579,6 +745,7 @@
                     calculateInterest();
                     applyTheme(userData.settings.theme); 
                     showGreeting();
+                    updateUI(); // Adicionando chamada explícita para renderizar
                 }
             } catch (e) {
                 console.error("Erro ao carregar/criar dados do usuário:", e);
@@ -613,11 +780,19 @@
                         .from('parent_control')
                         .insert([{ user_id: parentId, data: parentData }]);
                 } else if (fetchError) {
+                     // NOVO: Tratamento de erro específico da tabela (como o erro original)
+                     if (fetchError.message.includes('Could not find the table')) {
+                         showModal("Erro Crítico de Tabela", "A tabela **parent_control** não foi encontrada. Certifique-se de que ela existe na sua base de dados.");
+                         throw new Error(`Tabela 'parent_control' não encontrada: ${fetchError.message}`);
+                     }
                      throw new Error(fetchError.message);
                 }
             } catch (e) {
                 console.error("Erro ao carregar dados do pai:", e);
-                showModal("Erro de Dados", "Não foi possível carregar o dashboard. (Verifique permissões)");
+                // O modal é exibido dentro do bloco try/catch interno se for erro de tabela, senão, aqui.
+                if (!e.message.includes('Tabela \'parent_control\' não encontrada')) {
+                    showModal("Erro de Dados", "Não foi possível carregar o dashboard. (Verifique permissões)");
+                }
                 parentData = { name: "Responsável", children: [] };
             }
         }
@@ -626,6 +801,7 @@
             if (!childParentId) return; // Precisa do ID do pai para ouvir os dados
 
             // NOVO: Listener Supabase
+            // AQUI GARANTIMOS QUE O LISTENER ESTEJA ATIVO PARA O UID DA CRIANÇA
             supabase
                 .channel(`child_data_${uid}`) // Canal único por criança
                 .on('postgres_changes', { 
@@ -635,10 +811,11 @@
                     filter: `user_id=eq.${uid}` // Filtra pelo UID da criança
                 }, (payload) => {
                      // payload.new.data contém o objeto JSONB 'data'
-                     const data = payload.new.data.data;
-                     userData = { ...DEFAULT_CHILD_DATA, ...data };
-                     userData.settings.themes = { ...DEFAULT_CHILD_DATA.settings.themes, ...data.settings?.themes };
-                     userData.currentPet = { ...PET_CHARACTERS.find(p => p.id === data.currentPet?.id), ...data.currentPet }; 
+                     const docData = payload.new.data.data;
+                     
+                     // --- APLICA MESCLAGEM PROFUNDA NO UPDATE DE REALTIME ---
+                     userData = deepMergeUserData(userData, { ...docData, user_id: uid });
+                     // ----------------------------------------------------
 
                      applyTheme(userData.settings.theme); 
                      updateUI();
@@ -679,6 +856,7 @@
                 delete dataToSave.game;
                 
                 // Salva no documento da criança usando UPSERT na tabela 'child_profiles'
+                // Esta operação dispara o evento Realtime que o child está ouvindo.
                 await supabase
                     .from('child_profiles')
                     .upsert({ user_id: uid, parent_id: parentUidToUse, data: dataToSave }, { onConflict: 'user_id' }); // Usando UPSERT
@@ -713,14 +891,8 @@
                     .single();
 
                 if (docData) {
-                     // Garantindo que a estrutura é completa e segura
-                     return { 
-                         ...DEFAULT_CHILD_DATA, 
-                         ...docData.data, // Acessa o objeto 'data'
-                         tasks: docData.data?.tasks || [], 
-                         transactions: docData.data?.transactions || [],
-                         currentPet: { ...PET_CHARACTERS.find(p => p.id === docData.data?.currentPet?.id), ...docData.data?.currentPet } 
-                    };
+                    // Retorna os dados com a mesclagem profunda
+                    return deepMergeUserData(DEFAULT_CHILD_DATA, docData.data);
                 }
              } catch (e) {
                  console.error("Erro ao carregar snapshot da criança:", e);
@@ -848,15 +1020,17 @@
             
             // Atualiza Ícones, Emoção e Mascote
             // A lógica de renderização do ícone na tela da criança está aqui
-            const { type, value } = userData.profileIcon;
+            
+            // NOVO: Usar os dados completos do perfil
+            const profileIconData = userData.profileIcon || DEFAULT_CHILD_DATA.profileIcon;
             profileIconContainer.innerHTML = '';
-            profileIconContainer.innerHTML = getIconHtml(userData.profileIcon, 'text-4xl', 'w-16 h-16');
+            profileIconContainer.innerHTML = getIconHtml(profileIconData, 'text-4xl', 'w-16 h-16');
 
             // ** CORREÇÃO BICHINHO/MASCOTE **
             if (piggyCharEl) {
                  piggyCharEl.textContent = userData.currentPet?.value || '🐷'; 
             }
-            document.getElementById('emotion-display-container').textContent = userData.currentEmotion.value;
+            document.getElementById('emotion-display-container').textContent = userData.currentEmotion?.value || '😊'; // Usa fallback
 
             // Progresso
             const totalTasks = userData.tasks.length;
@@ -2027,12 +2201,15 @@
                                 </div>
                             </div>
                             
+                            <!-- Botões de Ação agrupados em ícones no lado direito -->
                             <div class="flex space-x-2 items-center p-1">
                                 
+                                <!-- Botão Gerenciar (Engrenagem) -->
                                 <button data-uid="${child.uid}" class="view-child-btn bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Gerenciar Perfil">
                                     <i class="fa-solid fa-gear text-xl"></i>
                                 </button>
                                 
+                                <!-- Botão Apagar (Lixeira) -->
                                 <button data-uid="${child.uid}" class="delete-child-btn text-red-500 bg-gray-100 hover:bg-red-100 p-2 rounded-full transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Apagar Perfil">
                                     <i class="fa-solid fa-trash-can text-xl"></i>
                                 </button>
@@ -2168,14 +2345,17 @@
                 
                 <div class="bg-white p-4 rounded-lg shadow-md mb-4 border-2 border-green-300">
                     <div class="flex items-center space-x-3 border-b pb-2 mb-3">
-                        ${iconHtml} <h4 class="text-2xl font-itim text-green-700">${child.name} <span class="ml-2 text-3xl">${currentEmotion}</span></h4>
+                        ${iconHtml} <!-- NOVO: Ícone aqui -->
+                        <h4 class="text-2xl font-itim text-green-700">${child.name} <span class="ml-2 text-3xl">${currentEmotion}</span></h4>
                     </div>
                     <p class="text-xl font-itim mb-2">Código de Acesso: <span class="text-blue-600 font-bold">${child.code}</span></p>
                     <p class="text-xl font-itim mb-2">Saldo Atual: <span class="text-orange-500 font-bold">${childData.coins} moedas</span></p>
                     
+                    <!-- NOVO: Exibição da Meta -->
                     <p class="text-xl font-itim mb-2">Meta: <span class="text-purple-600 font-bold">${childData.progress.targetName}</span></p>
                     <p class="text-xl font-itim mb-2">Poupança: <span class="text-red-500 font-bold">${savedAmount} / ${goalAmount} moedas</span></p>
 
+                    <!-- NOVO: Configurar Valor da Meta -->
                     <div class="bg-yellow-50 p-3 rounded-lg mt-3">
                         <label for="goal-value-input" class="text-lg font-bold font-itim block mb-1">Definir Valor da Meta:</label>
                         <div class="flex space-x-2">
@@ -2187,6 +2367,7 @@
                     <p class="text-xl font-itim mt-3 border-t pt-3">Tarefas: ${completedTasks} / ${totalTasks}</p>
                 </div>
                 
+                <!-- Gerenciar Moedas (Mesada) -->
                 <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Dar Mesada/Bônus</h5>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
@@ -2196,6 +2377,7 @@
                     </div>
                 </div>
 
+                <!-- Gerenciar Tarefas -->
                 <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Criar Tarefa</h5>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
@@ -2206,6 +2388,7 @@
                     <ul id="parent-tasks-list" class="space-y-1 mt-2 max-h-40 overflow-y-auto"></ul>
                 </div>
 
+                <!-- Histórico de Transações -->
                 <div class="bg-white p-4 rounded-lg shadow-md border-t">
                     <h5 class="text-xl font-itim text-gray-800 mb-3">Histórico de Transações</h5>
                     <div id="parent-child-history" class="max-h-40 overflow-y-auto border p-2 rounded bg-gray-50">
@@ -2386,19 +2569,26 @@
         initSupabase(); // CHAMADA ADICIONADA PARA INICIALIZAR O FLUXO DO APLICATIVO (Renomeado)
     </script>
     
+    <!-- VISTAS PRINCIPAIS -->
+    
+    <!-- 1. VISTA DE LOGIN -->
     <div id="login-view" class="w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
          style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 591px; margin-top: 50px;">
         
+        <!-- Mascote/Logo/Título -->
         <div class="flex flex-col items-center justify-center mb-8">
 
+             <!-- Ícone/Toggle Simples do Figma (Usamos o toggle funcional abaixo) -->
              <div class="w-14 h-8 bg-[#9AC0FB] rounded-full flex justify-center items-center p-1 mb-6">
                  <span id="login-title-type" class="text-sm font-bold text-white font-itim">Pai</span>
             </div>
 
             <h2 class="text-4xl font-itim text-gray-800">Fin Family</h2>
-            <span class="text-6xl mb-2">🐷</span>
+            <!-- NOVO: Porquinho 3D -->
+             <span class="text-6xl mb-2">🐷</span>
         </div>
         
+        <!-- Toggle Switch Funcional (Posicionado para melhor UX) -->
         <div class="flex items-center space-x-3 mb-6 p-2 bg-gray-100 rounded-full shadow-inner">
             <span class="font-itim text-lg text-gray-600">Criança</span>
             <label class="relative inline-flex items-center cursor-pointer">
@@ -2409,32 +2599,42 @@
         </div>
 
         <form id="login-form" class="w-full space-y-4">
+            <!-- Input 1 (Email) - WRAPPED FOR DYNAMIC HIDING -->
             <div id="parent-email-input-div"> 
-                <input type="email" id="login-email-input" placeholder="E-mail" value="admin@admin.com" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+                <input type="email" id="login-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             </div>
             
+            <!-- Input 2 (Password) - WRAPPED FOR DYNAMIC HIDING -->
             <div id="parent-password-input-div">
-                <input type="password" id="login-password-input" placeholder="Senha" value="admin" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
+                <input type="password" id="login-password-input" placeholder="Senha" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             </div>
             
+            <!-- Input 3 (Child Code - Initially Hidden) -->
             <input type="text" id="login-child-code-input" placeholder="Código da Criança (4 dígitos)" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base hidden" style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
             <p id="login-message" class="text-red-500 font-itim mt-3 text-center"></p>
 
+            <!-- Botões de Ação -->
             <div class="space-y-4 pt-4">
+                <!-- Entrar (Login - Blue Figma button) -->
                 <button type="submit" id="login-btn-submit" class="w-full bg-[#9AC1FB] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-blue-400 transition-colors" style="box-shadow: 0px 0px 4px 1px #556892;">
                     Entrar
                 </button>
                 
+                <!-- Criar Conta (Sign Up - Green Figma button) -->
+                <!-- CORREÇÃO: Usando a navegação real para a nova vista -->
                 <button type="button" onclick="showSignupView()" id="create-account-btn" class="w-full bg-[#C7F8DC] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-300 transition-colors" style="box-shadow: 0px 0px 4px 1px #6B8281;">
                     Criar conta
                 </button>
             </div>
         </form>
 
+        <!-- Link Esqueceu Senha (Hid in Child View) -->
+        <!-- CORREÇÃO: Usando a navegação real para a nova vista -->
         <a href="#" id="forgot-password-link" onclick="showForgotPasswordView()" class="text-sm font-itim text-gray-500 mt-4 hover:text-blue-500">Esqueceu a senha?</a>
     </div>
 
+    <!-- 2. VISTA DE CADASTRO (SIGN UP) -->
     <div id="signup-view" class="hidden w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
          style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 591px; margin-top: 50px;">
         
@@ -2445,16 +2645,21 @@
         </div>
 
         <form id="signup-form" class="w-full space-y-4">
+            <!-- Nome -->
             <input type="text" id="signup-name-input" placeholder="Seu Nome" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
+            <!-- E-mail -->
             <input type="email" id="signup-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
+            <!-- Senha -->
             <input type="password" id="signup-password-input" placeholder="Senha" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
+            <!-- Repetir Senha -->
             <input type="password" id="signup-confirm-password-input" placeholder="Repetir Senha" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
             <p id="signup-message" class="font-itim mt-3 text-center"></p>
 
+            <!-- Botão Criar Conta (Green Figma button) -->
             <div class="space-y-4 pt-4">
                 <button type="submit" id="signup-btn-submit" class="w-full bg-[#C7F8DC] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-300 transition-colors" style="box-shadow: 0px 0px 4px 1px #6B8281;">
                     Criar conta
@@ -2465,7 +2670,8 @@
         <a href="#" onclick="showLoginView()" class="text-sm font-itim text-gray-500 mt-4 hover:text-blue-500">Voltar para o Login</a>
     </div>
 
-    <div id="forgot-password-view" class="hidden w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
+    <!-- 3. VISTA DE ESQUECEU SENHA (FORGOT PASSWORD) -->
+     <div id="forgot-password-view" class="hidden w-11/12 max-w-sm p-6 bg-[#FCFCFC] rounded-2xl shadow-xl flex flex-col items-center z-10" 
          style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25); min-height: 400px; margin-top: 50px;">
         
         <div class="flex flex-col items-center justify-center mb-8">
@@ -2475,10 +2681,12 @@
         </div>
 
         <form id="forgot-password-form" class="w-full space-y-4">
+            <!-- E-mail -->
             <input type="email" id="reset-email-input" placeholder="E-mail" class="w-full p-4 border-0 rounded-xl shadow-md font-itim placeholder-gray-500 text-base" required style="box-shadow: 0px 0px 8px 1px rgba(0, 0, 0, 0.1);">
             
             <p id="reset-message" class="font-itim mt-3 text-center"></p>
 
+            <!-- Botão Entrar (Blue Figma button) -->
             <div class="space-y-4 pt-4">
                 <button type="submit" id="reset-btn-submit" class="w-full bg-[#9AC1FB] text-gray-800 p-3 rounded-full font-itim text-xl shadow-md hover:bg-blue-400 transition-colors" style="box-shadow: 0px 0px 4px 1px #556892;">
                     Redefinir Senha
@@ -2489,35 +2697,48 @@
         <a href="#" onclick="showLoginView()" class="text-sm font-itim text-gray-500 mt-4 hover:text-blue-500">Voltar para o Login</a>
     </div>
 
+    <!-- DASHBOARD DO PAI -->
     <div id="parent-dashboard-view" class="hidden w-full max-w-sm mobile-card relative overflow-hidden app-gradient">
         
+        <!-- VISTA DE LISTAGEM DE CRIANÇAS (TELA 1) -->
         <div id="parent-home-view" class="p-4 pt-8 h-full">
             
+            <!-- HEADER (FORA DO CARTÃO) -->
             <div class="flex justify-between items-start z-20 relative mb-4">
+                 <!-- CORREÇÃO: Saudação mais espaçada -->
                  <h1 id="parent-greeting" class="text-4xl font-itim text-black mt-2">Olá, Responsável!</h1>
                  
+                 <!-- Botões de Ação Superiores (Ícones) -->
                  <div class="flex space-x-2 pt-2">
+                    <!-- Botão Add Criança -->
                     <button onclick="renderAddChildModal()" class="bg-purple-500 text-white p-3 rounded-full hover:bg-purple-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Adicionar Criança">
                         <i class="fa-solid fa-plus text-xl"></i>
                     </button>
+                    <!-- Botão Sair -->
                     <button onclick="parentLogout()" class="bg-red-500 text-white p-3 rounded-full hover:bg-red-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Sair do Dashboard">
                         <i class="fa-solid fa-right-from-bracket text-xl"></i>
                     </button>
                 </div>
             </div>
 
+            <!-- Cartão Principal (Figma white card) -->
+            <!-- Ajustado top/bottom para usar a altura total disponível -->
             <div class="bg-[#FCFCFC] p-4 rounded-xl shadow-2xl absolute inset-x-4 bottom-4 top-[120px] z-10 overflow-y-auto" style="box-shadow: 0px 0px 10px 5px rgba(0, 0, 0, 0.25);">
                 
                 <h3 class="text-2xl font-itim text-blue-700 mb-3">Perfis Registrados</h3>
                 <div id="parent-children-list" class="space-y-4">
-                    </div>
+                    <!-- Perfis de crianças serão injetados aqui -->
+                </div>
                 
             </div>
         </div>
 
+        <!-- VISTA DE GERENCIAMENTO DE CRIANÇA (Tela 2) -->
         <div id="child-management-view" class="hidden p-4">
             
+            <!-- HEADER DO GERENCIAMENTO (Simplificado) -->
             <div class="flex justify-start items-center mb-4 pb-3 border-b">
+                <!-- Botão Voltar (Ícone Único) -->
                 <button onclick="showParentHome()" class="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors shadow-md w-10 h-10 flex items-center justify-center" title="Voltar">
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
@@ -2525,16 +2746,20 @@
             </div>
             
             <div id="child-management-container">
-                </div>
+                <!-- Conteúdo de Gerenciamento Injetado aqui (ID CORRIGIDO) -->
+            </div>
         </div>
     </div>
 
+    <!-- APP DA CRIANÇA (VISTA PRINCIPAL) -->
     <div id="child-app-view" class="hidden w-full max-w-sm p-4 bg-white rounded-xl shadow-2xl mobile-card relative overflow-hidden">
         
+        <!-- NOVO: Botão de Sair no canto superior direito -->
         <button id="child-logout-btn" class="absolute top-4 right-4 z-20 text-red-600 text-2xl p-2 rounded-full hover:bg-red-100 transition-colors">
             <i class="fa-solid fa-right-from-bracket"></i>
         </button>
 
+        <!-- Animação Mascote e Moedas -->
         <div class="flex flex-col items-center justify-center pt-8 pb-4 relative">
              <p id="piggy-greeting" class="absolute top-0 text-lg font-itim bg-yellow-100 p-2 rounded-lg transition-opacity opacity-0 text-center z-10">Olá!</p>
             
@@ -2548,6 +2773,7 @@
             </div>
         </div>
 
+        <!-- Cartão de Perfil -->
         <div class="bg-gray-100 p-4 rounded-xl shadow-inner mt-4">
             <div class="flex items-center space-x-4">
                 <div id="profile-icon-container" class="w-16 h-16 rounded-full overflow-hidden profile-placeholder flex items-center justify-center">
@@ -2558,6 +2784,7 @@
                         <h2 id="user-name" class="text-3xl font-itim text-gray-800">Alex</h2>
                         <div id="emotion-display-container" class="text-3xl p-1 cursor-pointer transition-transform hover:scale-110 active:scale-95" aria-label="Selecione sua Emoção">😊</div>
                     </div>
+                    <!-- NOVO: Exibição separada para o nome e valor da meta -->
                     <p id="coin-goal" class="text-sm font-itim text-gray-600 mt-1 cursor-pointer" id="goal-section">
                         <span id="goal-name-display">Meta: Brinquedo Novo</span>
                         <span class="font-bold ml-1 text-xs" id="goal-amount-display">(0/500 moedas)</span>
@@ -2566,9 +2793,11 @@
             </div>
         </div>
 
+        <!-- Seção de Progresso e Tarefas -->
         <div class="bg-white p-4 rounded-xl shadow-lg mt-6">
             <h3 class="text-xl font-itim text-gray-700 mb-3">Progresso</h3>
             
+            <!-- Barra de Progresso (Poupança) -->
             <div class="mb-4 cursor-pointer" id="goal-section">
                 <div class="w-full bg-gray-200 rounded-full h-3">
                     <div id="progress-bar" class="h-3 rounded-full bg-green-500 transition-all duration-500" style="width: 0%;"></div>
@@ -2579,6 +2808,7 @@
                 </div>
             </div>
 
+            <!-- Tarefas -->
             <div class="p-3 border rounded-lg shadow-sm cursor-pointer" id="tasks-edit-section">
                 <div class="flex justify-between items-center">
                     <span class="text-lg font-itim text-gray-800">Tarefas Diárias</span>
@@ -2586,30 +2816,37 @@
                 </div>
             </div>
             
+            <!-- Lista Rápida de Tarefas (Escondida, renderizada via JS) -->
             <ul id="tasks-list" class="mt-3 max-h-40 overflow-y-auto border rounded-lg divide-y divide-gray-200">
-                </ul>
+                <!-- Tarefas injetadas aqui -->
+            </ul>
         </div>
         
+        <!-- Botões de Ação (Ganhar, Poupar, Gastar, Doar) -->
         <div class="grid grid-cols-4 gap-3 mt-8 pb-4">
             
+            <!-- Ganhar (Jogo) -->
             <div id="action-ganhar" class="action-button bg-[#32CD32] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-gamepad text-3xl"></i>
                 <span id="earn-text" class="text-sm font-itim mt-1">Ganhar</span>
                 <span id="earn-amount" class="text-xs font-bold">+10</span>
             </div>
 
+            <!-- Poupar (Permite escolher valor) -->
             <div id="action-poupar" class="action-button bg-[#9AC1FB] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-sack-dollar text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Poupar</span>
                 <span id="save-amount" class="text-xs font-bold">Mudar</span>
             </div>
 
+            <!-- Gastar (Loja Mágica) -->
             <div id="action-gastar" class="action-button bg-[#FF6B6B] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-store text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Gastar</span>
                 <span id="spend-amount" class="text-xs font-bold">Comprar</span>
             </div>
 
+            <!-- Doar (Conquistas/Badges) -->
             <div id="action-doar" class="action-button bg-[#FBBC04] shadow-md p-3 rounded-xl flex flex-col items-center justify-center text-white">
                 <i class="fa-solid fa-trophy text-3xl"></i>
                 <span class="text-sm font-itim mt-1">Conquistas</span>
@@ -2617,7 +2854,11 @@
             </div>
         </div>
         
+        <!-- Botão de Ação Auxiliar (REMOVIDO BOTÃO DOAR MOEDAS) -->
         <div class="flex justify-center space-x-4 mt-4">
+            <!-- <button onclick="renderDonateModal()" class="text-sm text-pink-600 font-itim hover:text-pink-800 transition-colors">
+                <i class="fa-solid fa-heart mr-1"></i> Doar Moedas
+            </button> -->
             <button onclick="renderHistoryModal()" class="text-sm text-gray-600 font-itim hover:text-gray-800 transition-colors">
                 <i class="fa-solid fa-clock-rotate-left mr-1"></i> Histórico
             </button>
@@ -2625,6 +2866,7 @@
     </div>
 
 
+    <!-- SIDEBAR (Mantida para fins de re-uso no futuro, mas sem botão para abrir) -->
     <div id="sidebar" class="sidebar fixed top-0 left-0 w-64 h-full bg-white shadow-2xl transform -translate-x-full p-4 flex flex-col justify-between z-50">
         <div>
             <div class="flex justify-between items-center border-b pb-3 mb-4">
@@ -2648,6 +2890,7 @@
         </button>
     </div>
 
+    <!-- MODAL PRINCIPAL (Usado para todas as interações) -->
     <div id="main-modal" class="hidden modal-overlay fixed inset-0 flex items-center justify-center p-4">
         <div class="modal-content bg-white p-6 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-3 mb-4">
@@ -2662,6 +2905,7 @@
         </div>
     </div>
     
+    <!-- MODAL DO MINI-GAME -->
     <div id="game-modal" class="hidden modal-overlay fixed inset-0 flex items-center justify-center p-4">
         <div class="modal-content bg-white p-4 rounded-xl max-w-xs flex flex-col items-center">
             <h3 class="text-2xl font-itim text-purple-600 mb-2">Mini-Game: Saltitante</h3>
