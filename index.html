@@ -340,6 +340,16 @@
                     piggyContainerEl.addEventListener('click', triggerReaction);
                 }
                 
+                // NOVO: Adicionar listener para tocar na foto de perfil
+                if (profileIconContainer) {
+                    profileIconContainer.addEventListener('click', () => {
+                        if (userType === 'Child') {
+                            renderShopModal('icons');
+                        }
+                    });
+                    profileIconContainer.classList.add('cursor-pointer'); // Adicionar feedback visual de clique
+                }
+
                 // --- NOVO MAPEMANETO DE BOTÕES DE AÇÃO (CRIANÇA) ---
                 document.getElementById('action-ganhar')?.addEventListener('click', launchGame);
 
@@ -1890,7 +1900,7 @@
 
 
         // --- NOVO: LÓGICA DA LOJA MÁGICA REVISADA ---
-        window.renderShopModal = function() {
+        window.renderShopModal = function(initialTab = 'themes') { // Adicionado parâmetro opcional
             showModal("Loja Mágica ✨", `
                 <div class="tabs flex space-x-2 border-b mb-4 font-itim">
                     <button id="tab-themes" class="tab-btn p-2 border-b-2 border-transparent hover:border-blue-400" data-tab="themes">Temas</button>
@@ -1902,7 +1912,7 @@
                 <p class="text-right text-sm font-bold text-orange-500 mt-4">Suas Moedas: ${userData.coins}</p>
             `);
             
-            let currentTab = 'themes';
+            let currentTab = initialTab;
             
             function renderTab(tabId) {
                 const contentEl = document.getElementById('shop-content');
@@ -2052,6 +2062,7 @@
                         if (type === 'theme') {
                             userData.settings.themes[id].purchased = true;
                             userData.settings.theme = id;
+                            applyTheme(id); // CORREÇÃO: Aplica o tema imediatamente
                         } else if (type === 'pet') {
                             userData.unlockedPets.push(id);
                             userData.currentPet = PET_CHARACTERS.find(p => p.id === id);
@@ -2069,6 +2080,7 @@
                         // Lógica de Equipamento
                         if (type === 'theme') {
                             userData.settings.theme = id;
+                            applyTheme(id); // CORREÇÃO: Aplica o tema imediatamente
                         } else if (type === 'pet') {
                             userData.currentPet = PET_CHARACTERS.find(p => p.id === id);
                         } else if (type === 'icon') {
@@ -2849,7 +2861,8 @@
         <!-- Cartão de Perfil -->
         <div class="soft-card p-4 mt-4 border-2 border-gray-100">
             <div class="flex items-center space-x-4">
-                <div id="profile-icon-container" class="w-16 h-16 rounded-full overflow-hidden profile-placeholder flex items-center justify-center border-4 border-white">
+                <!-- Alterar foto de perfil ao clicar (cursor-pointer adicionado) -->
+                <div id="profile-icon-container" class="w-16 h-16 rounded-full overflow-hidden profile-placeholder flex items-center justify-center border-4 border-white cursor-pointer transition-transform hover:scale-105 active:scale-95">
                     <i class="fa-solid fa-user-astronaut text-4xl text-gray-500"></i>
                 </div>
                 <div>
