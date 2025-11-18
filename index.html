@@ -1705,7 +1705,8 @@
             canvas?.addEventListener('click', handleInput);
         }
         
-        function gameOver() {
+        // Expondo a função gameOver globalmente para que o onclick do HTML possa chamá-la
+        window.gameOver = function() {
             game.isRunning = false;
             document.removeEventListener('keydown', handleInput);
             canvas?.removeEventListener('click', handleInput);
