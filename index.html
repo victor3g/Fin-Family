@@ -59,6 +59,16 @@
             /* Mantido o min-height para garantir a altura em iframe/mobile */
             min-height: 90vh;
         }
+        /* NOVO: Aumentar o min-height para telas maiores no dashboard do pai */
+        @media (min-width: 768px) {
+            .parent-desktop-card {
+                min-height: 95vh; 
+            }
+            .child-desktop-card {
+                min-height: 85vh; 
+            }
+        }
+
 
         .profile-placeholder {
             background: #D1D5DB; 
@@ -306,12 +316,13 @@
                      // Quando a sessão é detectada (o usuário está logado ou a sessão foi restaurada)
                     if (session) {
                         currentUserId = session.user.id;
-                        showLoginView();
+                        // NOVO: Chama o callback para tratar URL de recuperação, senão navega
+                        handleAuthCallback(session);
                     } else {
                         // Tenta criar um usuário anônimo (Guest) se não houver sessão
                         if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
                             currentUserId = null; 
-                            showLoginView(); 
+                            handleAuthCallback(); // Chama o callback também para tratar URLs sem sessão
                         }
                     }
                 });
@@ -376,6 +387,9 @@
             // NOVAS VISTAS DE LOGIN
             document.getElementById('signup-view').classList.add('hidden');
             document.getElementById('forgot-password-view').classList.add('hidden');
+            
+            // NOVO: VISTA DE RESET
+            document.getElementById('reset-password-view').classList.add('hidden');
 
             document.getElementById(viewId).classList.remove('hidden');
         }
@@ -391,7 +405,12 @@
             document.getElementById('reset-message').textContent = '';
             setView('forgot-password-view');
         }
-
+        
+        // NOVO: Navegação para Redefinir Senha (Chamada pelo Auth Callback)
+        window.showResetPasswordView = function() {
+            document.getElementById('new-reset-message').textContent = '';
+            setView('reset-password-view');
+        }
 
         // CORREÇÃO: Garante que a vista de login use o tema padrão
         window.showLoginView = function() {
@@ -474,6 +493,52 @@
             } else {
                 showModal("Erro", "Não foi possível carregar o perfil da criança.");
                 window.showParentHome();
+            }
+        }
+        
+        // NOVO: Função para tratar a URL após o clique no link de recuperação de senha.
+        async function handleAuthCallback(session) {
+            // A Supabase Auth armazena informações de recuperação/email verification no hash da URL.
+            const hash = window.location.hash;
+            
+            if (hash.includes('access_token') && hash.includes('type=recovery')) {
+                // 1. Redireciona para a vista de Redefinição de Senha
+                showResetPasswordView();
+                
+                // 2. O Supabase.auth.onAuthStateChange já logou o usuário temporariamente,
+                // então podemos limpar o hash da URL para evitar loops/problemas.
+                history.replaceState(null, '', window.location.pathname + window.location.search);
+                
+                return; // Impede que a navegação normal de login continue
+            }
+            
+            // Se houver sessão (usuário logado) e não for um callback de recuperação
+            if (session) {
+                // Tenta carregar o perfil do pai (padrão)
+                const { data: parentControlData, error: parentControlError } = await supabase
+                    .from('parent_control')
+                    .select('user_id')
+                    .eq('user_id', session.user.id)
+                    .single();
+                
+                if (parentControlData) {
+                    showParentDashboard(session.user.id);
+                } else if (parentControlError && parentControlError.code === 'PGRST116') {
+                    // Se não for um perfil de pai, pode ser um UID de criança logado temporariamente
+                    // (Embora o fluxo de login da criança não use Auth, é cauteloso)
+                    // Se não for pai, volta para o login.
+                    showLoginView();
+                } else if (parentControlError) {
+                    console.error("Erro ao verificar perfil de pai:", parentControlError);
+                    showLoginView();
+                } else {
+                    // Usuário logado, mas não encontrado como pai (cai para login)
+                    showLoginView();
+                }
+
+            } else {
+                // Se não houver sessão, mostra a tela de login.
+                showLoginView();
             }
         }
 
@@ -691,8 +756,8 @@
 
             // 1. Envia o link de redefinição de senha
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                 // Redirecionar após o clique no link (opcional)
-                 // redirectTo: 'SUA_URL_DE_REDIRECIONAMENTO' 
+                 // CRÍTICO: Redireciona para o URL atual para que o app trate o hash
+                 redirectTo: window.location.origin + window.location.pathname
             });
 
             if (error) {
@@ -709,6 +774,53 @@
             
             // Após o envio, volta para o login principal
             setTimeout(() => {
+                 showLoginView();
+            }, 3000);
+        });
+
+        // NOVO: LÓGICA DE ATUALIZAÇÃO DA SENHA (NOVA VIEW)
+        document.getElementById('new-reset-password-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newPassword = document.getElementById('new-password-input').value;
+            const confirmPassword = document.getElementById('confirm-new-password-input').value;
+            const messageEl = document.getElementById('new-reset-message');
+
+            messageEl.classList.remove('text-red-500', 'text-green-600');
+            messageEl.textContent = 'A atualizar senha...';
+            messageEl.classList.add('text-gray-600');
+
+            if (newPassword !== confirmPassword) {
+                 messageEl.textContent = "Erro: As senhas não coincidem.";
+                 messageEl.classList.add('text-red-500');
+                 return;
+            }
+            if (newPassword.length < 6) {
+                 messageEl.textContent = "Erro: A senha deve ter no mínimo 6 dígitos.";
+                 messageEl.classList.add('text-red-500');
+                 return;
+            }
+
+            // 1. Atualiza a senha do usuário logado pela sessão temporária de recuperação
+            const { error } = await supabase.auth.updateUser({
+                password: newPassword
+            });
+
+            if (error) {
+                console.error("Erro ao atualizar senha:", error);
+                messageEl.textContent = `Erro ao redefinir: ${error.message}. Tente novamente.`;
+                messageEl.classList.remove('text-gray-600');
+                messageEl.classList.add('text-red-500');
+                return;
+            }
+
+            // 2. Sucesso!
+            messageEl.textContent = `Senha redefinida com sucesso! Você será redirecionado para o login.`;
+            messageEl.classList.remove('text-gray-600');
+            messageEl.classList.add('text-green-600');
+            
+            // 3. O Supabase.auth.updateUser() normalmente encerra a sessão, então navegamos para o login
+            setTimeout(async () => {
+                 await supabase.auth.signOut(); // Garantir logout da sessão temporária
                  showLoginView();
             }, 3000);
         });
@@ -1076,7 +1188,7 @@
                  bodyEl.classList.add('app-gradient');
                  bodyEl.classList.remove('login-background'); // REMOÇÃO DO BG DE LOGIN
                  bodyEl.classList.remove('bg-[#EDEFF2]');
-            } else { // Usuário Guest (Login/Signup/Forgot Password)
+            } else { // Usuário Guest (Login/Signup/Forgot Password/Reset Password)
                  bodyEl.classList.remove('app-gradient');
                  bodyEl.classList.add('login-background'); // ADICIONA O BG DE LOGIN
                  bodyEl.classList.remove('bg-[#EDEFF2]');
@@ -2453,56 +2565,67 @@
 
             childManagementContainer.innerHTML = `
                 
-                <div class="soft-card p-4 mb-4 border-2 border-green-300">
-                    <div class="flex items-center space-x-3 border-b pb-2 mb-3">
-                        ${iconHtml} <!-- NOVO: Ícone aqui -->
-                        <h4 class="text-2xl font-itim text-green-700">${child.name} <span class="ml-2 text-3xl">${currentEmotion}</span></h4>
-                    </div>
-                    <p class="text-xl font-itim mb-2">Código de Acesso: <span class="text-blue-600 font-bold">${child.code}</span></p>
-                    <p class="text-xl font-itim mb-2">Saldo Atual: <span class="text-orange-500 font-bold">${childData.coins} moedas</span></p>
+                <!-- Layout de 2 colunas para desktop -->
+                <div class="grid grid-cols-1 md:grid-cols-2 md:gap-4">
                     
-                    <!-- NOVO: Exibição da Meta -->
-                    <p class="text-xl font-itim mb-2">Meta: <span class="text-purple-600 font-bold">${childData.progress.targetName}</span></p>
-                    <p class="text-xl font-itim mb-2">Poupança: <span class="text-red-500 font-bold">${savedAmount} / ${goalAmount} moedas</span></p>
+                    <!-- Coluna 1: Informações e Mesada/Bônus -->
+                    <div>
+                        <!-- Cartão de Informações Principais -->
+                        <div class="soft-card p-4 mb-4 border-2 border-green-300">
+                            <div class="flex items-center space-x-3 border-b pb-2 mb-3">
+                                ${iconHtml} <!-- NOVO: Ícone aqui -->
+                                <h4 class="text-2xl font-itim text-green-700">${child.name} <span class="ml-2 text-3xl">${currentEmotion}</span></h4>
+                            </div>
+                            <p class="text-xl font-itim mb-2">Código de Acesso: <span class="text-blue-600 font-bold">${child.code}</span></p>
+                            <p class="text-xl font-itim mb-2">Saldo Atual: <span class="text-orange-500 font-bold">${childData.coins} moedas</span></p>
+                            
+                            <!-- Exibição e Configuração da Meta -->
+                            <p class="text-xl font-itim mb-2">Meta: <span class="text-purple-600 font-bold">${childData.progress.targetName}</span></p>
+                            <p class="text-xl font-itim mb-2">Poupança: <span class="text-red-500 font-bold">${savedAmount} / ${goalAmount} moedas</span></p>
 
-                    <!-- NOVO: Configurar Valor da Meta -->
-                    <div class="bg-yellow-50 p-3 rounded-lg mt-3 soft-card">
-                        <label for="goal-value-input" class="text-lg font-bold font-itim block mb-1">Definir Valor da Meta:</label>
-                        <div class="flex space-x-2">
-                            <input type="number" id="goal-value-input" placeholder="Novo Valor em Moedas" class="soft-input w-full p-2 border rounded-lg font-itim" min="1" value="${goalAmount}">
-                            <button id="set-goal-btn" class="bg-yellow-600 text-white p-2 rounded-lg font-itim hover:bg-yellow-700 action-button">Salvar</button>
+                            <!-- Configurar Valor da Meta -->
+                            <div class="bg-yellow-50 p-3 rounded-lg mt-3 soft-card">
+                                <label for="goal-value-input" class="text-lg font-bold font-itim block mb-1">Definir Valor da Meta:</label>
+                                <div class="flex space-x-2">
+                                    <input type="number" id="goal-value-input" placeholder="Novo Valor em Moedas" class="soft-input w-full p-2 border rounded-lg font-itim" min="1" value="${goalAmount}">
+                                    <button id="set-goal-btn" class="bg-yellow-600 text-white p-2 rounded-lg font-itim hover:bg-yellow-700 action-button">Salvar</button>
+                                </div>
+                            </div>
+
+                            <p class="text-xl font-itim mt-3 border-t pt-3">Tarefas: ${completedTasks} / ${totalTasks}</p>
+                        </div>
+                        
+                        <!-- Gerenciar Moedas (Mesada/Bônus) -->
+                        <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4 md:mb-0 soft-card">
+                            <h5 class="text-xl font-itim text-gray-800 mb-3">Dar Mesada/Bônus</h5>
+                            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                                <input type="number" id="allowance-amount" placeholder="Qtd. Moedas" class="soft-input w-full sm:w-1/4 p-2 border rounded-lg font-itim" min="1" value="10">
+                                <input type="text" id="allowance-reason" placeholder="Motivo (Ex: Mesada Semanal)" class="soft-input w-full sm:flex-grow p-2 border rounded-lg font-itim">
+                                <button id="give-allowance-btn" class="w-full sm:w-auto bg-green-500 text-white p-2 rounded-lg font-itim hover:bg-green-600 action-button">Dar Moedas</button>
+                            </div>
                         </div>
                     </div>
+                    
+                    <!-- Coluna 2: Gerenciar Tarefas e Histórico -->
+                    <div>
+                        <!-- Gerenciar Tarefas -->
+                        <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4 soft-card">
+                            <h5 class="text-xl font-itim text-gray-800 mb-3">Criar Tarefa</h5>
+                            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                                <input type="text" id="parent-new-task-input" placeholder="Nova Tarefa (Ex: Lavar louça)" class="soft-input w-full sm:flex-grow p-2 border rounded-lg font-itim">
+                                <button id="parent-add-task-btn" class="w-full sm:w-auto bg-purple-500 text-white p-2 rounded-lg font-itim hover:bg-purple-600 action-button">Adicionar</button>
+                            </div>
+                            <h5 class="text-xl font-itim text-gray-800 mt-4 border-t pt-3">Tarefas Atuais</h5>
+                            <ul id="parent-tasks-list" class="space-y-1 mt-2 max-h-40 overflow-y-auto"></ul>
+                        </div>
 
-                    <p class="text-xl font-itim mt-3 border-t pt-3">Tarefas: ${completedTasks} / ${totalTasks}</p>
-                </div>
-                
-                <!-- Gerenciar Moedas (Mesada) -->
-                <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4 soft-card">
-                    <h5 class="text-xl font-itim text-gray-800 mb-3">Dar Mesada/Bônus</h5>
-                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                        <input type="number" id="allowance-amount" placeholder="Qtd. Moedas" class="soft-input w-full sm:w-1/4 p-2 border rounded-lg font-itim" min="1" value="10">
-                        <input type="text" id="allowance-reason" placeholder="Motivo (Ex: Mesada Semanal)" class="soft-input w-full sm:flex-grow p-2 border rounded-lg font-itim">
-                        <button id="give-allowance-btn" class="w-full sm:w-auto bg-green-500 text-white p-2 rounded-lg font-itim hover:bg-green-600 action-button">Dar Moedas</button>
-                    </div>
-                </div>
-
-                <!-- Gerenciar Tarefas -->
-                <div class="bg-gray-100 p-4 rounded-lg shadow-inner mb-4 soft-card">
-                    <h5 class="text-xl font-itim text-gray-800 mb-3">Criar Tarefa</h5>
-                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                        <input type="text" id="parent-new-task-input" placeholder="Nova Tarefa (Ex: Lavar louça)" class="soft-input w-full sm:flex-grow p-2 border rounded-lg font-itim">
-                        <button id="parent-add-task-btn" class="w-full sm:w-auto bg-purple-500 text-white p-2 rounded-lg font-itim hover:bg-purple-600 action-button">Adicionar</button>
-                    </div>
-                    <h5 class="text-xl font-itim text-gray-800 mt-4 border-t pt-3">Tarefas Atuais</h5>
-                    <ul id="parent-tasks-list" class="space-y-1 mt-2 max-h-40 overflow-y-auto"></ul>
-                </div>
-
-                <!-- Histórico de Transações -->
-                <div class="soft-card p-4 border-t">
-                    <h5 class="text-xl font-itim text-gray-800 mb-3">Histórico de Transações</h5>
-                    <div id="parent-child-history" class="max-h-40 overflow-y-auto border p-2 rounded bg-gray-50">
-                        ${renderHistoryList(childData.transactions)}
+                        <!-- Histórico de Transações -->
+                        <div class="soft-card p-4 border-t">
+                            <h5 class="text-xl font-itim text-gray-800 mb-3">Histórico de Transações</h5>
+                            <div id="parent-child-history" class="max-h-40 overflow-y-auto border p-2 rounded bg-gray-50">
+                                ${renderHistoryList(childData.transactions)}
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -2682,7 +2805,7 @@
     <!-- VISTAS PRINCIPAIS -->
     
     <!-- 1. VISTA DE LOGIN -->
-    <div id="login-view" class="w-11/12 max-w-sm p-6 soft-card flex flex-col items-center z-10" 
+    <div id="login-view" class="w-11/12 max-w-sm md:max-w-lg p-6 soft-card flex flex-col items-center z-10" 
          style="min-height: 591px; margin-top: 50px;">
         
         <!-- Mascote/Logo/Título -->
@@ -2745,7 +2868,7 @@
     </div>
 
     <!-- 2. VISTA DE CADASTRO (SIGN UP) -->
-    <div id="signup-view" class="hidden w-11/12 max-w-sm p-6 soft-card flex flex-col items-center z-10" 
+    <div id="signup-view" class="hidden w-11/12 max-w-sm md:max-w-lg p-6 soft-card flex flex-col items-center z-10" 
          style="min-height: 591px; margin-top: 50px;">
         
         <div class="flex flex-col items-center justify-center mb-6">
@@ -2781,7 +2904,7 @@
     </div>
 
     <!-- 3. VISTA DE ESQUECEU SENHA (FORGOT PASSWORD) -->
-     <div id="forgot-password-view" class="hidden w-11/12 max-w-sm p-6 soft-card flex flex-col items-center z-10" 
+     <div id="forgot-password-view" class="hidden w-11/12 max-w-sm md:max-w-lg p-6 soft-card flex flex-col items-center z-10" 
          style="min-height: 400px; margin-top: 50px;">
         
         <div class="flex flex-col items-center justify-center mb-8">
@@ -2807,8 +2930,40 @@
         <a href="#" onclick="showLoginView()" class="text-sm font-itim text-gray-500 mt-4 hover:text-blue-500">Voltar para o Login</a>
     </div>
 
+    <!-- NOVO: 4. VISTA DE REDEFINIÇÃO DE SENHA (RESET PASSWORD) -->
+    <div id="reset-password-view" class="hidden w-11/12 max-w-sm md:max-w-lg p-6 soft-card flex flex-col items-center z-10" 
+         style="min-height: 400px; margin-top: 50px;">
+        
+        <div class="flex flex-col items-center justify-center mb-8">
+            <span class="text-6xl mb-2">🔒</span>
+            <h2 class="text-3xl font-itim text-gray-800">Nova Senha</h2>
+            <p class="text-sm text-gray-500 font-itim text-center">Digite a sua nova senha.</p>
+        </div>
+
+        <form id="new-reset-password-form" class="w-full space-y-4">
+            <!-- Nova Senha -->
+            <input type="password" id="new-password-input" placeholder="Nova Senha (mín. 6 dígitos)" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
+            
+            <!-- Confirmação de Senha -->
+            <input type="password" id="confirm-new-password-input" placeholder="Confirmar Nova Senha" class="w-full p-4 border-0 rounded-xl soft-input font-itim placeholder-gray-500 text-base" required>
+            
+            <p id="new-reset-message" class="font-itim mt-3 text-center"></p>
+
+            <!-- Botão Atualizar Senha -->
+            <div class="space-y-4 pt-4">
+                <button type="submit" id="update-password-btn" class="w-full bg-green-500 text-white p-3 rounded-full font-itim text-xl shadow-md hover:bg-green-600 transition-colors action-button">
+                    Atualizar Senha
+                </button>
+            </div>
+        </form>
+        
+        <!-- O usuário será redirecionado automaticamente -->
+    </div>
+
+
     <!-- DASHBOARD DO PAI -->
-    <div id="parent-dashboard-view" class="hidden w-full max-w-sm mobile-card relative overflow-hidden app-gradient">
+    <!-- Ajustado para max-w-full e md:max-w-4xl (Desktop) e usa nova classe parent-desktop-card -->
+    <div id="parent-dashboard-view" class="hidden w-full max-w-full md:max-w-4xl mobile-card parent-desktop-card relative overflow-hidden app-gradient">
         
         <!-- VISTA DE LISTAGEM DE CRIANÇAS (TELA 1) -->
         <div id="parent-home-view" class="p-4 pt-8 h-full">
@@ -2833,11 +2988,12 @@
             </div>
 
             <!-- Cartão Principal (Figma white card) -->
-            <!-- Ajustado top/bottom para usar a altura total disponível e usando soft-card -->
+            <!-- Ajustado para Desktop: top/bottom para usar a altura total disponível, e grid de 2 colunas para crianças -->
             <div class="soft-card p-4 absolute inset-x-4 bottom-4 top-[120px] z-10 overflow-y-auto">
                 
                 <h3 class="text-2xl font-itim text-blue-700 mb-3">Perfis Registrados</h3>
-                <div id="parent-children-list" class="space-y-4">
+                <!-- NOVO: Grid de 1 coluna no mobile, 2 colunas no desktop -->
+                <div id="parent-children-list" class="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-4">
                     <!-- Perfis de crianças serão injetados aqui -->
                 </div>
                 
@@ -2845,7 +3001,7 @@
         </div>
 
         <!-- VISTA DE GERENCIAMENTO DE CRIANÇA (Tela 2) -->
-        <div id="child-management-view" class="hidden p-4">
+        <div id="child-management-view" class="hidden p-4 h-full overflow-y-auto">
             
             <!-- HEADER DO GERENCIAMENTO (Simplificado) -->
             <div class="flex justify-start items-center mb-4 pb-3 border-b">
@@ -2863,118 +3019,133 @@
     </div>
 
     <!-- APP DA CRIANÇA (VISTA PRINCIPAL) -->
-    <div id="child-app-view" class="hidden w-full max-w-sm p-4 soft-card mobile-card relative overflow-hidden">
+    <!-- Ajustado para max-w-xl (Desktop) e nova classe child-desktop-card -->
+    <div id="child-app-view" class="hidden w-full max-w-sm md:max-w-xl p-4 soft-card mobile-card child-desktop-card relative overflow-hidden">
         
         <!-- NOVO: Botão de Sair no canto superior direito -->
         <button id="child-logout-btn" class="absolute top-4 right-4 z-20 text-red-600 text-2xl p-2 rounded-full hover:bg-red-100 transition-colors">
             <i class="fa-solid fa-right-from-bracket"></i>
         </button>
 
-        <!-- Animação Mascote e Moedas -->
-        <div class="flex flex-col items-center justify-center pt-8 pb-4 relative">
-             <p id="piggy-greeting" class="absolute top-0 text-lg font-itim bg-yellow-100 p-2 rounded-lg transition-opacity opacity-0 text-center z-10 soft-card">Olá!</p>
-            
-            <div id="animated-piggy-container" class="w-24 h-24 flex items-center justify-center relative">
-                <span id="piggy-character" class="piggy-character text-7xl">🐷</span>
-            </div>
+        <!-- Container Principal - Layout em 2 Colunas no Desktop -->
+        <div class="grid grid-cols-1 md:grid-cols-2 md:gap-6 h-full">
 
-            <div class="flex items-center space-x-3 mt-4">
-                <!-- Moedas maiores e em destaque -->
-                <span class="text-7xl text-orange-500 font-itim font-extrabold" id="coin-count">0</span>
-                <i class="fa-solid fa-coins text-yellow-500 text-4xl"></i>
-            </div>
-        </div>
-
-        <!-- Cartão de Perfil -->
-        <div class="soft-card p-4 mt-4 border-2 border-gray-100">
-            <div class="flex items-center space-x-4">
-                <!-- Alterar foto de perfil ao clicar (cursor-pointer adicionado) -->
-                <div id="profile-icon-container" class="w-16 h-16 rounded-full overflow-hidden profile-placeholder flex items-center justify-center border-4 border-white cursor-pointer transition-transform hover:scale-105 active:scale-95">
-                    <i class="fa-solid fa-user-astronaut text-4xl text-gray-500"></i>
+            <!-- Coluna 1: Mascote, Saldo e Ações (Mobile: 1ª seção) -->
+            <div class="md:order-1 flex flex-col items-center pt-8 pb-4 relative">
+                 <p id="piggy-greeting" class="absolute top-0 text-lg font-itim bg-yellow-100 p-2 rounded-lg transition-opacity opacity-0 text-center z-10 soft-card">Olá!</p>
+                
+                <div id="animated-piggy-container" class="w-32 h-32 md:w-40 md:h-40 flex items-center justify-center relative">
+                    <span id="piggy-character" class="piggy-character text-8xl md:text-9xl">🐷</span>
                 </div>
-                <div>
-                    <div class="flex items-center space-x-2">
-                        <h2 id="user-name" class="text-3xl font-itim text-gray-800">Alex</h2>
-                        <div id="emotion-display-container" class="text-3xl p-1 cursor-pointer transition-transform hover:scale-110 active:scale-95 soft-card rounded-full" aria-label="Selecione sua Emoção">😊</div>
+
+                <div class="flex flex-col items-center mt-4">
+                    <!-- Moedas maiores e em destaque -->
+                    <span class="text-7xl md:text-8xl text-orange-500 font-itim font-extrabold" id="coin-count">0</span>
+                    <div class="flex items-center space-x-2 mt-2">
+                        <i class="fa-solid fa-coins text-yellow-500 text-4xl"></i>
+                        <span class="text-2xl font-itim text-gray-700">Moedas Mágicas</span>
                     </div>
-                    <!-- NOVO: Exibição separada para o nome e valor da meta -->
-                    <p id="coin-goal" class="text-sm font-itim text-gray-600 mt-1 cursor-pointer" id="goal-section">
-                        <span id="goal-name-display">Meta: Brinquedo Novo</span>
-                        <span class="font-bold ml-1 text-xs" id="goal-amount-display">(0/500 moedas)</span>
-                    </p>
                 </div>
-            </div>
-        </div>
 
-        <!-- Seção de Progresso e Tarefas -->
-        <div class="soft-card p-4 mt-6">
-            <h3 class="text-xl font-itim text-gray-700 mb-3">Progresso</h3>
-            
-            <!-- Barra de Progresso (Poupança) -->
-            <div class="mb-4 cursor-pointer" id="goal-section">
-                <div class="w-full bg-gray-300 rounded-full h-4">
-                    <!-- Cantos mais arredondados para a barra de progresso -->
-                    <div id="progress-bar" class="h-4 rounded-full bg-green-500 transition-all duration-500" style="width: 0%;"></div>
-                </div>
-                <div class="flex justify-between mt-1 text-sm font-itim text-gray-600">
-                    <span>Poupança</span>
-                    <span id="progress-percent">0%</span>
+                <!-- Botões de Ação (Ganhar, Poupar, Gastar, Doar) - Agora abaixo do Mascote -->
+                <!-- Grid de 4 colunas no mobile, 2x2 no desktop (md:grid-cols-2) -->
+                <div class="grid grid-cols-4 md:grid-cols-2 gap-3 mt-8 pb-4 md:w-full">
+                    
+                    <!-- Ganhar (Jogo) -->
+                    <button id="action-ganhar" class="action-button action-green p-3 flex flex-col items-center justify-center text-white col-span-1">
+                        <i class="fa-solid fa-gamepad text-3xl"></i>
+                        <span id="earn-text" class="text-sm font-itim mt-1">Ganhar</span>
+                        <span id="earn-amount" class="text-xs font-bold">+10</span>
+                    </button>
+
+                    <!-- Poupar (Permite escolher valor) -->
+                    <button id="action-poupar" class="action-button action-blue p-3 flex flex-col items-center justify-center text-white col-span-1">
+                        <i class="fa-solid fa-sack-dollar text-3xl"></i>
+                        <span class="text-sm font-itim mt-1">Poupar</span>
+                        <span id="save-amount" class="text-xs font-bold">Mudar</span>
+                    </button>
+
+                    <!-- Gastar (Loja Mágica) -->
+                    <button id="action-gastar" class="action-button action-red p-3 flex flex-col items-center justify-center text-white col-span-1">
+                        <i class="fa-solid fa-store text-3xl"></i>
+                        <span class="text-sm font-itim mt-1">Gastar</span>
+                        <span id="spend-amount" class="text-xs font-bold">Comprar</span>
+                    </button>
+
+                    <!-- Doar (Conquistas/Badges) -->
+                    <button id="action-doar" class="action-button action-yellow p-3 flex flex-col items-center justify-center text-white col-span-1">
+                        <i class="fa-solid fa-trophy text-3xl"></i>
+                        <span class="text-sm font-itim mt-1">Conquistas</span>
+                        <span id="donate-amount" class="text-xs font-bold">Ver</span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Tarefas -->
-            <div class="p-3 border rounded-xl soft-card cursor-pointer" id="tasks-edit-section">
-                <div class="flex justify-between items-center">
-                    <span class="text-lg font-itim text-gray-800">Tarefas Diárias</span>
-                    <span class="text-lg font-itim text-purple-600"><span id="tasks-done">0</span>/<span id="tasks-total">0</span></span>
+            <!-- Coluna 2: Cartão de Perfil, Progresso e Tarefas (Mobile: 2ª seção) -->
+            <div class="md:order-2 flex flex-col">
+
+                <!-- Cartão de Perfil -->
+                <div class="soft-card p-4 mt-4 md:mt-0 border-2 border-gray-100 flex-shrink-0">
+                    <div class="flex items-center space-x-4">
+                        <!-- Alterar foto de perfil ao clicar (cursor-pointer adicionado) -->
+                        <div id="profile-icon-container" class="w-16 h-16 rounded-full overflow-hidden profile-placeholder flex items-center justify-center border-4 border-white cursor-pointer transition-transform hover:scale-105 active:scale-95">
+                            <i class="fa-solid fa-user-astronaut text-4xl text-gray-500"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <h2 id="user-name" class="text-3xl font-itim text-gray-800">Alex</h2>
+                                <div id="emotion-display-container" class="text-3xl p-1 cursor-pointer transition-transform hover:scale-110 active:scale-95 soft-card rounded-full" aria-label="Selecione sua Emoção">😊</div>
+                            </div>
+                            <!-- NOVO: Exibição separada para o nome e valor da meta -->
+                            <p id="coin-goal" class="text-sm font-itim text-gray-600 mt-1 cursor-pointer" id="goal-section">
+                                <span id="goal-name-display">Meta: Brinquedo Novo</span>
+                                <span class="font-bold ml-1 text-xs" id="goal-amount-display">(0/500 moedas)</span>
+                            </p>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Seção de Progresso e Tarefas (Ocupa o restante do espaço) -->
+                <div class="soft-card p-4 mt-6 flex-grow overflow-y-auto">
+                    <h3 class="text-xl font-itim text-gray-700 mb-3">Progresso</h3>
+                    
+                    <!-- Barra de Progresso (Poupança) -->
+                    <div class="mb-4 cursor-pointer" id="goal-section">
+                        <div class="w-full bg-gray-300 rounded-full h-4">
+                            <!-- Cantos mais arredondados para a barra de progresso -->
+                            <div id="progress-bar" class="h-4 rounded-full bg-green-500 transition-all duration-500" style="width: 0%;"></div>
+                        </div>
+                        <div class="flex justify-between mt-1 text-sm font-itim text-gray-600">
+                            <span>Poupança</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Tarefas -->
+                    <div class="p-3 border rounded-xl soft-card cursor-pointer" id="tasks-edit-section">
+                        <div class="flex justify-between items-center">
+                            <span class="text-lg font-itim text-gray-800">Tarefas Diárias</span>
+                            <span class="text-lg font-itim text-purple-600"><span id="tasks-done">0</span>/<span id="tasks-total">0</span></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista Rápida de Tarefas (Escondida, renderizada via JS) -->
+                    <ul id="tasks-list" class="mt-3 max-h-40 md:max-h-60 overflow-y-auto border rounded-xl divide-y divide-gray-200 soft-card">
+                        <!-- Tarefas injetadas aqui -->
+                    </ul>
+                </div>
+                
+                 <!-- Botão de Ação Auxiliar -->
+                <div class="flex justify-center space-x-4 mt-4 mb-2 flex-shrink-0">
+                    <button onclick="renderHistoryModal()" class="text-sm text-gray-600 font-itim hover:text-gray-800 transition-colors">
+                        <i class="fa-solid fa-clock-rotate-left mr-1"></i> Histórico
+                    </button>
+                </div>
+
             </div>
-            
-            <!-- Lista Rápida de Tarefas (Escondida, renderizada via JS) -->
-            <ul id="tasks-list" class="mt-3 max-h-40 overflow-y-auto border rounded-xl divide-y divide-gray-200 soft-card">
-                <!-- Tarefas injetadas aqui -->
-            </ul>
+
         </div>
         
-        <!-- Botões de Ação (Ganhar, Poupar, Gastar, Doar) -->
-        <!-- Uso de classes action-button e cores puras -->
-        <div class="grid grid-cols-4 gap-3 mt-8 pb-4">
-            
-            <!-- Ganhar (Jogo) -->
-            <button id="action-ganhar" class="action-button action-green p-3 flex flex-col items-center justify-center text-white">
-                <i class="fa-solid fa-gamepad text-3xl"></i>
-                <span id="earn-text" class="text-sm font-itim mt-1">Ganhar</span>
-                <span id="earn-amount" class="text-xs font-bold">+10</span>
-            </button>
-
-            <!-- Poupar (Permite escolher valor) -->
-            <button id="action-poupar" class="action-button action-blue p-3 flex flex-col items-center justify-center text-white">
-                <i class="fa-solid fa-sack-dollar text-3xl"></i>
-                <span class="text-sm font-itim mt-1">Poupar</span>
-                <span id="save-amount" class="text-xs font-bold">Mudar</span>
-            </button>
-
-            <!-- Gastar (Loja Mágica) -->
-            <button id="action-gastar" class="action-button action-red p-3 flex flex-col items-center justify-center text-white">
-                <i class="fa-solid fa-store text-3xl"></i>
-                <span class="text-sm font-itim mt-1">Gastar</span>
-                <span id="spend-amount" class="text-xs font-bold">Comprar</span>
-            </button>
-
-            <!-- Doar (Conquistas/Badges) -->
-            <button id="action-doar" class="action-button action-yellow p-3 flex flex-col items-center justify-center text-white">
-                <i class="fa-solid fa-trophy text-3xl"></i>
-                <span class="text-sm font-itim mt-1">Conquistas</span>
-                <span id="donate-amount" class="text-xs font-bold">Ver</span>
-            </button>
-        </div>
-        
-        <!-- Botão de Ação Auxiliar -->
-        <div class="flex justify-center space-x-4 mt-4">
-            <button onclick="renderHistoryModal()" class="text-sm text-gray-600 font-itim hover:text-gray-800 transition-colors">
-                <i class="fa-solid fa-clock-rotate-left mr-1"></i> Histórico
-            </button>
-        </div>
     </div>
 
 
