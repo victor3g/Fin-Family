@@ -164,6 +164,10 @@
         let currentChildId = null; // Usado no dashboard do pai para focar na criança
         let userType = 'Guest'; // 'Parent', 'Child', 'Guest'
         let childParentId = null; // O ID do pai que possui os dados da criança logada
+        
+        // VARIÁVEIS DE SUBSCRIÇÃO REALTIME (CRÍTICO PARA CLEANUP)
+        let parentSubscription = null; 
+        let childSubscription = null;
 
         // Credenciais do Pai (Simulação)
         // REMOVIDO: HARDCODED - Não é mais usado para login, pois usamos o Supabase Auth.
@@ -429,6 +433,9 @@
             sidebarEl?.classList.add('-translate-x-full'); 
             
             await loadOrCreateUserData(currentUserId, DEFAULT_CHILD_DATA);
+            // Se loadOrCreateUserData falhou e userData.name é indefinido, paramos
+            if (!userData.name && userType === 'Child') return;
+
             setupRealtimeListener(currentUserId);
             setView('child-app-view');
             // Recarrega o timer do jogo para mostrar o tempo restante corretamente
@@ -452,11 +459,21 @@
         }
         
         // CORREÇÃO: Função parentLogout exposta para ser chamada diretamente no 'onclick' do HTML
-        window.parentLogout = function() {
+        window.parentLogout = async function() {
             userType = 'Guest';
             parentId = null;
             currentChildId = null;
             childParentId = null;
+            
+            // CORREÇÃO DE SEGURANÇA: Cleanup de Listeners e Dados
+            if (parentSubscription) {
+                supabase.removeChannel(parentSubscription);
+                parentSubscription = null;
+            }
+            // Limpa o estado para evitar contaminação entre sessões
+            parentData = { name: "Responsável", children: [] };
+            
+            await supabase.auth.signOut();
             showLoginView();
         }
         
@@ -465,6 +482,14 @@
              userType = 'Guest';
              currentUserId = null;
              childParentId = null;
+             
+             // CORREÇÃO DE SEGURANÇA: Cleanup
+             if (childSubscription) {
+                 await supabase.removeChannel(childSubscription);
+                 childSubscription = null;
+             }
+             userData = {}; // Limpa dados da criança
+
              // Substituição: Sai do Supabase Auth
              await supabase.auth.signOut();
              showLoginView();
@@ -625,40 +650,45 @@
         async function childLogin(code) {
             document.getElementById('login-message').textContent = 'Buscando perfil...';
             
-            let childFound = false;
+            // --- CORREÇÃO DE BUSCA DO SUPABASE (SECURITY FIX) ---
+            // Agora usamos o filtro .contains() para buscar apenas o registro que contém o código.
+            // Isso evita baixar todos os registros do banco de dados (Select All).
             
-            // --- CORREÇÃO DE BUSCA DO SUPABASE ---
-            // 1. Busca TODOS os documentos de controle do pai para checar o código localmente.
-            // Isso exige permissão de SELECT (ALL) na tabela parent_control (já configurada no RLS).
-            const { data, error } = await supabase
-                .from('parent_control')
-                .select('user_id, data');
-            
-            if (error) {
-                console.error("Erro ao buscar perfis de pai:", error);
-                document.getElementById('login-message').textContent = 'Erro de comunicação com o banco de dados.';
-                return;
-            }
-            
-            if (data && data.length > 0) {
-                // 2. Itera sobre os documentos (pais) para encontrar o código da criança
-                for (const parentControl of data) {
+            try {
+                // Busca apenas o documento que tem o código específico no array 'children'
+                const { data, error } = await supabase
+                    .from('parent_control')
+                    .select('user_id, data')
+                    .contains('data', { children: [{ code: code }] });
+                
+                if (error) {
+                    console.error("Erro ao buscar perfil da criança:", error);
+                    document.getElementById('login-message').textContent = 'Erro de comunicação com o banco de dados.';
+                    return;
+                }
+
+                if (data && data.length > 0) {
+                    // Encontrou o pai que tem esse código
+                    // Nota: Se múltiplos pais tiverem o mesmo código (raro mas possível com random), pegamos o primeiro.
+                    const parentControl = data[0];
                     const parentId = parentControl.user_id;
                     const children = parentControl.data?.children || [];
                     
                     const child = children.find(c => c.code === code);
                     
                     if (child) {
-                        childFound = true;
                         // Encontrado! Passa o UID da criança (child.uid) e o ID do pai (parentId)
                         showChildApp(child.uid, parentId); 
                         return;
                     }
                 }
-            }
-            
-            if (!childFound) {
-                 document.getElementById('login-message').textContent = 'Código de acesso inválido ou não encontrado.';
+                
+                // Se não encontrar em 'parent_control', significa que foi deletado ou não existe
+                document.getElementById('login-message').textContent = 'Código de acesso inválido ou não encontrado.';
+
+            } catch (e) {
+                console.error("Erro inesperado no login da criança:", e);
+                document.getElementById('login-message').textContent = 'Ocorreu um erro inesperado.';
             }
         }
         
@@ -698,8 +728,8 @@
                 password: password,
                 options: {
                     data: { full_name: name },
-                    // CORREÇÃO: Força o redirecionamento para o URL atual do Canvas
-                    redirectTo: window.location.origin + window.location.pathname
+                    // CRÍTICO: Força o redirecionamento para o URL de produção
+                    redirectTo: 'https://fin-family-eight.vercel.app'
                 }
             });
 
@@ -757,8 +787,8 @@
 
             // 1. Envia o link de redefinição de senha
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                 // CRÍTICO: Redireciona para o URL atual para que o app trate o hash
-                 redirectTo: window.location.origin + window.location.pathname
+                 // CRÍTICO: Redireciona para o URL de produção para que o app trate o hash
+                 redirectTo: 'https://fin-family-eight.vercel.app'
             });
 
             if (error) {
@@ -921,17 +951,23 @@
                     // ---------------------------------
                     
                 } else if (fetchError && fetchError.code === NO_ROWS_FOUND_ERROR) {
-                    userData = defaultData;
-                    // Define o nome da criança se estiver sendo criada após o login do pai
-                    const parentChild = parentData.children.find(c => c.uid === uid);
-                    if (parentChild) {
-                         userData.name = parentChild.name;
+                    // SEGURANÇA: Se o perfil não existe e estamos tentando logar como criança, NÃO CRIAR AUTOMATICAMENTE.
+                    // A criação deve ser feita explicitamente pelo PAI no dashboard.
+                    // Se chegou aqui, significa que a criança foi deletada ou o código é velho.
+                    
+                    if (userType === 'Child') {
+                        console.error("Perfil de criança não encontrado (Provavelmente deletado). Negando acesso.");
+                        showModal("Acesso Negado", "Este perfil não existe mais. Fale com seu responsável.");
+                        showLoginView(); // Volta para login
+                        userData = {}; // Limpa
+                        return;
                     }
                     
-                    // 2. Cria os dados (INSERT)
-                    await supabase
-                        .from('child_profiles')
-                        .insert([{ user_id: uid, parent_id: parentUidToUse, data: userData }]);
+                    // Se for o PAI acessando (ex: preview ou criação), aí sim criamos? 
+                    // Não, a criação agora é feita exclusivamente via 'renderAddChildModal'.
+                    // Portanto, nunca devemos cair aqui para criar um perfil do zero implicitamente.
+                    userData = defaultData;
+                    // O insert original foi removido daqui para evitar 'zumbis'.
 
                 } else if (fetchError) {
                      throw new Error(fetchError.message);
@@ -958,6 +994,10 @@
                 return;
             }
 
+            // CORREÇÃO CRÍTICA DE SEGURANÇA (VISUAL) E EVITAR DUPLICAÇÃO:
+            // Reseta parentData antes de carregar novos dados para evitar que dados do usuário anterior permaneçam.
+            parentData = { name: "Responsável", children: [] };
+
             try {
                 // 1. Busca os dados (SELECT) na tabela 'parent_control'
                 const { data: existingData, error: fetchError } = await supabase
@@ -969,12 +1009,16 @@
                 const NO_ROWS_FOUND_ERROR = 'PGRST116'; 
 
                 if (existingData) {
+                    // Mescla APENAS se o dado existir, mas começa limpo (graças à linha acima)
                     parentData = { ...parentData, ...existingData.data };
                 } else if (fetchError && fetchError.code === NO_ROWS_FOUND_ERROR) {
-                    // 2. Cria o documento se não existir (INSERT)
+                    // 2. Cria o documento se não existir (INSERT) APENAS COM O NOME PADRÃO
+                    // Isso evita inserir dados "herdados" de uma variável global suja
+                    const newParentData = { name: "Responsável", children: [] };
                     await supabase
                         .from('parent_control')
-                        .insert([{ user_id: parentId, data: parentData }]);
+                        .insert([{ user_id: parentId, data: newParentData }]);
+                    parentData = newParentData;
                 } else if (fetchError) {
                      // NOVO: Tratamento de erro específico da tabela (como o erro original)
                      if (fetchError.message.includes('Could not find the table')) {
@@ -990,9 +1034,8 @@
                     parentData.name = userData.user.user_metadata.full_name.split(' ')[0]; // Pega o primeiro nome
                 } else if (userData?.user?.email) {
                     parentData.name = userData.user.email.split('@')[0]; // Pega o nome do email
-                } else {
-                    parentData.name = "Responsável"; // Fallback
                 }
+                // Não precisamos do 'else' fallback aqui porque já definimos "Responsável" no início
                 
             } catch (e) {
                 console.error("Erro ao carregar dados do pai:", e);
@@ -1005,52 +1048,65 @@
         }
 
         function setupRealtimeListener(uid) {
-            if (!childParentId) return; // Precisa do ID do pai para ouvir os dados
+            if (!childParentId) return; 
 
-            // NOVO: Listener Supabase
-            // AQUI GARANTIMOS QUE O LISTENER ESTEJA ATIVO PARA O UID DA CRIANÇA
-            supabase
-                .channel(`child_data_${uid}`) // Canal único por criança
+            // CORREÇÃO CRÍTICA: Limpa listener anterior se existir
+            if (childSubscription) {
+                supabase.removeChannel(childSubscription);
+                childSubscription = null;
+            }
+
+            const channel = supabase
+                .channel(`child_data_${uid}`) 
                 .on('postgres_changes', { 
-                    event: 'UPDATE', // Escuta apenas por UPDATES
+                    event: 'UPDATE', 
                     schema: 'public', 
                     table: 'child_profiles', 
-                    filter: `user_id=eq.${uid}` // Filtra pelo UID da criança
+                    filter: `user_id=eq.${uid}` 
                 }, (payload) => {
-                     // payload.new.data contém o objeto JSONB 'data'
-                     const docData = payload.new.data.data;
-                     
-                     // --- APLICA MESCLAGEM PROFUNDA NO UPDATE DE REALTIME ---
-                     // Mesclamos sobre o dado atual (userData)
-                     userData = deepMergeUserData(userData, { ...docData, user_id: uid });
-                     // ----------------------------------------------------
+                     // SEGURANÇA: Se o usuário logado mudou, ignora updates do canal antigo
+                     if (currentUserId !== uid) return;
 
+                     const docData = payload.new.data.data;
+                     userData = deepMergeUserData(userData, { ...docData, user_id: uid });
                      applyTheme(userData.settings.theme); 
                      updateUI();
                 })
                 .subscribe();
+            
+            childSubscription = channel;
         }
         
         function setupParentRealtimeListener(uid) {
-            if (!uid || typeof uid !== 'string') { // CORREÇÃO: ADDED NULL/TYPE CHECK
+            if (!uid || typeof uid !== 'string') { 
                 console.error("setupParentRealtimeListener: UID é inválido.");
                 return; 
             }
 
-            // NOVO: Listener Supabase
-             supabase
-                 .channel(`parent_data_${uid}`) // Canal único por pai
+             // CORREÇÃO CRÍTICA: Limpa listener anterior se existir
+            if (parentSubscription) {
+                supabase.removeChannel(parentSubscription);
+                parentSubscription = null;
+            }
+
+             const channel = supabase
+                 .channel(`parent_data_${uid}`) 
                  .on('postgres_changes', { 
                     event: 'UPDATE', 
                     schema: 'public', 
                     table: 'parent_control', 
-                    filter: `user_id=eq.${uid}` // Filtra pelo UID do pai
+                    filter: `user_id=eq.${uid}` 
                  }, (payload) => {
+                     // SEGURANÇA: Se o usuário logado mudou, ignora updates do canal antigo
+                     if (currentUserId !== uid) return;
+
                      const data = payload.new.data.data;
                      parentData = { ...parentData, ...data };
                      renderParentDashboard();
                  })
                  .subscribe();
+            
+            parentSubscription = channel;
         }
 
 
@@ -2243,7 +2299,7 @@
                         <p class="font-bold text-sm">${item.label}</p>
                         <p class="text-xs text-gray-500 mb-2">${owned ? 'Seu' : `${price} Moedas`}</p>
                         <button class="select-emotion-btn ${buttonClass} text-white text-xs p-1 rounded-lg w-full transition-colors action-button"
-                            data-value="${item.value}" data-id="${item.id}" data-price="${price}" data-owned="${owned}">
+                            data-value="${item.value}" data-id="${item.id}" data-price="${item.price || 0}" data-owned="${owned}">
                             ${buttonText}
                         </button>
                     </div>
@@ -2578,7 +2634,19 @@
             if (!parentId || userType !== 'Parent' || !uid) return;
 
             try {
-                // 1. Remove o documento principal da criança no Supabase
+                // 0. SEGURANÇA: Recarregar dados do pai para garantir que 'parentData' está fresco
+                // Isso evita deletar usando uma lista desatualizada
+                const { data: currentParentData, error: fetchError } = await supabase
+                    .from('parent_control')
+                    .select('data')
+                    .eq('user_id', parentId)
+                    .single();
+
+                if (currentParentData) {
+                     parentData = { ...parentData, ...currentParentData.data };
+                }
+
+                // 1. Remove o documento principal da criança no Supabase (child_profiles)
                 const { error: deleteError } = await supabase
                     .from('child_profiles')
                     .delete()
@@ -2586,7 +2654,7 @@
                     
                 if (deleteError) throw new Error(deleteError.message);
 
-                // 2. Remove a criança da lista denormalizada do pai (parentData.children)
+                // 2. Remove a criança da lista denormalizada do pai (parentData.children) e salva
                 parentData.children = parentData.children.filter(child => child.uid !== uid);
                 await saveParentData(); 
                 
