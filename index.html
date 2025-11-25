@@ -849,16 +849,16 @@
             }
 
             if (data.user) {
-                // 2. Se a conta foi criada, exibe sucesso e volta para login
-                // A mensagem assume que a confirmação por e-mail foi desativada no dashboard.
-                messageEl.textContent = `Conta criada com sucesso! Faça login abaixo.`;
+                // 2. Se a conta foi criada, exibe sucesso e instrui verificação por e-mail
+                // Mostra o e-mail usado e orienta o usuário a confirmar antes de logar.
+                messageEl.textContent = `Conta criada com sucesso! Verifique o e-mail ${email} e confirme sua conta antes de efetuar o login. Verifique também a caixa de spam.`;
                 messageEl.classList.remove('text-gray-600');
                 messageEl.classList.add('text-green-600');
-                
-                // Redireciona após 3 segundos.
+
+                // Redireciona para a tela de login após 5 segundos para que o usuário leia a instrução.
                 setTimeout(() => {
                     showLoginView();
-                }, 3000);
+                }, 5000);
             } else {
                  // Caso de erro genérico sem lançamento de exceção (ex: e-mail já existe)
                  messageEl.textContent = "Erro: Usuário já existe ou outro problema. Verifique o console.";
