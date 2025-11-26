@@ -162,11 +162,10 @@
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.44.2/+esm";
 
         // Variáveis globais obrigatórias para Supabase (CREDENCIAIS FORNECIDAS)
+        // AVISO DE SEGURANÇA: Embora esta seja a chave pública "anon", 
+        // certifique-se de que as políticas RLS no Supabase estejam corretamente configuradas.
         const SUPABASE_URL = "https://jwwgsyibgwpvgfbsltzr.supabase.co"; 
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3d2dzeWliZ3dwdmdmYnNsdHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzNzkzMDAsImV4cCI6MjA3ODk1NTMwMH0.9iA_dKu4UJf-tQV03YdG8J1N4FhuP_flxHr7HWDbt9I"; 
-        
-        const initialAuthToken = null; 
-        const appId = 'default-app-id';
 
         let supabase, parentId = null; 
         let currentUserId = null; // UID do usuário logado (pai ou criança, anônimo)
@@ -177,10 +176,12 @@
         // VARIÁVEIS DE SUBSCRIÇÃO REALTIME (CRÍTICO PARA CLEANUP)
         let parentSubscription = null; 
         let childSubscription = null;
+        
+        // CORREÇÃO: Variável para armazenar o ID do intervalo do cooldown (para cleanup)
+        let cooldownIntervalId = null;
 
-        // Credenciais do Pai (Simulação)
-        // REMOVIDO: HARDCODED - Não é mais usado para login, pois usamos o Supabase Auth.
-        const PARENT_CREDENCIAIS = { email: 'admin@admin.com', password: 'admin' };
+        // NOTA DE SEGURANÇA: Credenciais removidas do código. 
+        // O login é feito via Supabase Auth - não manter credenciais hardcoded.
         
         // Constante de duração da recarga do jogo (6 horas)
         const COOLDOWN_DURATION_MS = 6 * 60 * 60 * 1000; 
@@ -521,7 +522,11 @@
             setupRealtimeListener(currentUserId);
             setView('child-app-view');
             // Recarrega o timer do jogo para mostrar o tempo restante corretamente
-            setInterval(() => {
+            // CORREÇÃO: Armazena o ID do intervalo para cleanup posterior
+            if (cooldownIntervalId) {
+                clearInterval(cooldownIntervalId);
+            }
+            cooldownIntervalId = setInterval(() => {
                 if (isGameOnCooldown()) updateUI();
             }, 60000);
             
@@ -570,6 +575,13 @@
                  await supabase.removeChannel(childSubscription);
                  childSubscription = null;
              }
+             
+             // CORREÇÃO: Cleanup do intervalo do cooldown
+             if (cooldownIntervalId) {
+                 clearInterval(cooldownIntervalId);
+                 cooldownIntervalId = null;
+             }
+             
              userData = {}; // Limpa dados da criança
 
              // Substituição: Sai do Supabase Auth
@@ -2068,11 +2080,28 @@
 
         // --- FUNÇÕES MODAIS ---
         
-        // NOVO: Função auxiliar para converter **Markdown** para HTML <b>
+        // Função auxiliar para escapar caracteres HTML perigosos (prevenção de XSS)
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // CORREÇÃO: Função auxiliar para converter **Markdown** para HTML <b>
+        // Agora com sanitização para prevenir XSS
         function convertMarkdownToHtml(text) {
-            if (typeof text !== 'string') return text;
-            // Converte **negrito** para <b>negrito</b>
-            return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+            if (typeof text !== 'string') return String(text || '');
+            
+            // 1. Primeiro escapa todo o HTML para prevenir XSS
+            let safeText = escapeHtml(text);
+            
+            // 2. Depois converte **negrito** para <b>negrito</b>
+            safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+            
+            // 3. Converte quebras de linha para <br>
+            safeText = safeText.replace(/\n/g, '<br>');
+            
+            return safeText;
         }
 
         function renderTasks(container, showDelete = false) {
@@ -2555,27 +2584,33 @@
 
 
         // --- DASHBOARD DO PAI LÓGICA (MANTIDA) ---
-        // Função utilitária para gerar código
+        // Função utilitária para gerar código único
+        // CORREÇÃO: Melhorada para verificar colisões com códigos existentes
         function generateUniqueCode() {
+            // Coleta todos os códigos existentes no parentData
+            const existingCodes = (parentData.children || []).map(c => c.code);
+            
             let code = '';
-            for (let i = 0; i < 4; i++) {
-                code += Math.floor(Math.random() * 10).toString();
+            let attempts = 0;
+            const maxAttempts = 100; // Evita loop infinito
+            
+            do {
+                code = '';
+                for (let i = 0; i < 4; i++) {
+                    code += Math.floor(Math.random() * 10).toString();
+                }
+                attempts++;
+            } while (existingCodes.includes(code) && attempts < maxAttempts);
+            
+            // Se não conseguiu gerar um código único, usa timestamp como fallback
+            if (attempts >= maxAttempts) {
+                code = Date.now().toString().slice(-4);
             }
+            
             return code;
         }
 
-        // NOVO: Mudar para a Home do Pai (Tela 1) - EXPOSTO GLOBALMENTE
-        window.showParentHome = function() {
-            currentChildId = null; // Desseleciona a criança
-            
-            const homeView = document.getElementById('parent-home-view');
-            const managementView = document.getElementById('child-management-view');
-
-            if (homeView) homeView.classList.remove('hidden');
-            if (managementView) managementView.classList.add('hidden');
-            
-            renderParentDashboard(); // Renderiza a lista de crianças
-        }
+        // NOTA: As funções showParentHome e showChildManagementView estão definidas acima (linhas ~593-617)
 
         // NOVO: RENDERIZA MODAL PARA ADICIONAR CRIANÇA
         window.renderAddChildModal = function() {
@@ -2796,19 +2831,7 @@
             }
         }
         
-        // NOVO: Mudar para o Gerenciamento da Criança (Tela 2) - EXPOSTO GLOBALMENTE
-        window.showChildManagementView = async function(childUid) {
-            currentChildId = childUid;
-            const childData = await getChildDataSnapshot(childUid);
-            if (childData) {
-                renderChildManagement(childData);
-                document.getElementById('parent-home-view').classList.add('hidden');
-                document.getElementById('child-management-view').classList.remove('hidden');
-            } else {
-                showModal("Erro", "Não foi possível carregar o perfil da criança.");
-                window.showParentHome();
-            }
-        }
+        // NOTA: A função showChildManagementView está definida acima (linhas ~606-617)
 
         function renderChildManagement(childData) {
             // CORREÇÃO: Altera o alvo para o ID único da vista de gerenciamento
