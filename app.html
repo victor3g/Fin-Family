@@ -2603,14 +2603,22 @@
             } while (existingCodes.includes(code) && attempts < maxAttempts);
             
             // Se não conseguiu gerar um código único, usa timestamp como fallback
+            // Também verifica se o fallback já existe
             if (attempts >= maxAttempts) {
-                code = Date.now().toString().slice(-4);
+                let fallbackCode = Date.now().toString().slice(-4);
+                let fallbackAttempts = 0;
+                while (existingCodes.includes(fallbackCode) && fallbackAttempts < 10) {
+                    // Adiciona offset ao timestamp para criar variação
+                    fallbackCode = (Date.now() + fallbackAttempts).toString().slice(-4);
+                    fallbackAttempts++;
+                }
+                code = fallbackCode;
             }
             
             return code;
         }
 
-        // NOTA: As funções showParentHome e showChildManagementView estão definidas acima (linhas ~593-617)
+        // NOTA: As funções showParentHome e showChildManagementView estão definidas na seção de navegação/rotas acima
 
         // NOVO: RENDERIZA MODAL PARA ADICIONAR CRIANÇA
         window.renderAddChildModal = function() {
@@ -2831,7 +2839,7 @@
             }
         }
         
-        // NOTA: A função showChildManagementView está definida acima (linhas ~606-617)
+        // NOTA: A função showChildManagementView está definida na seção de navegação/rotas acima
 
         function renderChildManagement(childData) {
             // CORREÇÃO: Altera o alvo para o ID único da vista de gerenciamento
