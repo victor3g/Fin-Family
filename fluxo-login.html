@@ -130,30 +130,23 @@
                     if (data.role === 'child') window.location.href = 'ChildDashboard.html';
                 }
 
-                // --- 1. VERIFICAÇÃO MANUAL DO HASH (CRÍTICO) ---
-                // Verifica se a URL tem "type=recovery" assim que carrega
                 const hash = window.location.hash;
                 if (hash && hash.includes('type=recovery')) {
-                    setView("reset_password"); // Força a tela de reset
-                    
-                    // Opcional: Feedback imediato
-                    // setModal({ title: "Recuperação", message: "Defina sua nova senha.", type: "info", onClose: () => setModal(null) });
+                    setView("reset_password");
                 }
 
-                // 2. Detecção de Erros (Link Expirado)
                 if (hash && hash.includes('error=')) {
                     const params = new URLSearchParams(hash.substring(1));
                     const errorDescription = params.get('error_description')?.replace(/\+/g, ' ');
                     
                     setModal({
                         title: "Link Inválido ⚠️",
-                        message: errorDescription || "O link de recuperação expirou. Por favor, solicite um novo.",
+                        message: errorDescription || "O link de recuperação expirou ou já foi usado. Por favor, solicite uma nova redefinição de senha.",
                         type: "error",
                         action: () => { setView('forgot'); window.location.hash = ''; }
                     });
                 }
 
-                // 3. Ouvinte de Eventos do Supabase
                 const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
                     if (event === "PASSWORD_RECOVERY") {
                         setView("reset_password");
@@ -173,11 +166,23 @@
 
                 if (userType === 'parent') {
                     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-                    if (error) { 
-                        setMessage({text: 'Erro: Credenciais inválidas.', type: 'error'}); 
+                    
+                    if (error) {
+                        // Verifica especificamente se o e-mail não foi confirmado
+                        if (error.message.includes("Email not confirmed")) {
+                            setModal({
+                                title: "Confirme seu E-mail 📧",
+                                message: "Sua conta foi criada, mas você precisa confirmar o e-mail antes de entrar. Verifique sua caixa de entrada e spam.",
+                                type: "info",
+                                buttonText: "Entendi"
+                            });
+                        } else {
+                            setMessage({text: 'Erro: Credenciais inválidas.', type: 'error'}); 
+                        }
                         setLoading(false); 
                         return; 
                     }
+
                     localStorage.setItem('fin_session', JSON.stringify({ role: 'parent', uid: data.user.id }));
                     window.location.href = 'ParentDashboard.html';
                 } else {
@@ -199,17 +204,31 @@
                 e.preventDefault();
                 if (password !== confirmPassword) { setMessage({text: 'Senhas não coincidem.', type: 'error'}); return; }
                 setLoading(true);
+                
                 const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
+                
                 if (error) {
                     setMessage({text: error.message, type: 'error'});
                 } else {
-                    await supabase.from('parent_control').insert([{ user_id: data.user.id, data: { name: name || "Responsável", children: [] } }]);
-                    setModal({
-                        title: "Conta Criada! 🎉",
-                        message: "Seu cadastro foi realizado. Verifique seu e-mail para confirmar a conta antes de entrar.",
-                        type: "success",
-                        action: () => setView('login')
-                    });
+                    // CORREÇÃO CRÍTICA: Verifica se o usuário já existe (Identities vazio)
+                    if (data.user && data.user.identities && data.user.identities.length === 0) {
+                         setModal({
+                            title: "Conta Existente 🙋‍♂️",
+                            message: "Este e-mail já está cadastrado. Tente fazer login ou use a opção 'Esqueceu a senha?'.",
+                            type: "error",
+                            buttonText: "Ir para Login",
+                            action: () => setView('login')
+                        });
+                    } else {
+                        // Sucesso Real
+                        await supabase.from('parent_control').insert([{ user_id: data.user.id, data: { name: name || "Responsável", children: [] } }]);
+                        setModal({
+                            title: "Conta Criada! 🎉",
+                            message: "Seu cadastro foi realizado com sucesso! Verifique seu e-mail para confirmar a conta antes de entrar.",
+                            type: "success",
+                            action: () => setView('login')
+                        });
+                    }
                 }
                 setLoading(false);
             };
@@ -218,9 +237,7 @@
                 e.preventDefault();
                 setLoading(true); setMessage({text: '', type: ''});
                 
-                // CRÍTICO: Monta a URL limpa para redirecionamento
                 const cleanRedirectUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
-
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {
                     redirectTo: cleanRedirectUrl, 
                 });
@@ -286,7 +303,7 @@
                 <div className={`min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br ${bgGradient} transition-colors duration-700`}>
                     <div className="absolute inset-0 z-0 opacity-40 bg-polka animate-gradient-xy"></div>
                     
-                    {modal && <Modal title={modal.title} message={modal.message} type={modal.type} onClose={closeModal} />}
+                    {modal && <Modal title={modal.title} message={modal.message} type={modal.type} onClose={closeModal} buttonText={modal.buttonText} />}
 
                     <button onClick={() => setShowHelp(!showHelp)} className="fixed top-4 right-4 z-50 bg-white/80 p-3 rounded-full shadow-lg text-blue-500 hover:scale-110 transition-transform">
                         <i className="fa-solid fa-question text-xl"></i>
@@ -442,4 +459,3 @@
     </script>
 </body>
 </html>
-
